@@ -42,7 +42,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - run: docker build -t osa-infra:ci .
-      - run: docker compose --env-file .env -f infra/compose.yml up --build --wait
+      - run: docker compose --env-file .env -f infra/compose.yml up -d --build
       - run: npm run test:compose
       - if: always()
         run: docker compose --env-file .env -f infra/compose.yml down --volumes

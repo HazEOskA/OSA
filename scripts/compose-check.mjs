@@ -19,7 +19,17 @@ async function request(path, body) {
   );
   return response.json();
 }
-const ready = await request('/health/ready');
+let ready;
+const deadline = Date.now() + 30000;
+while (Date.now() < deadline) {
+  try {
+    ready = await request('/health/ready');
+    break;
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+assert.ok(ready, 'Container API did not become ready within 30 seconds');
 assert.equal(ready.store, 'postgres');
 const boot = await request('/api/bootstrap');
 assert.equal(
