@@ -38,7 +38,7 @@ function version(entity: Entity, expected: unknown) {
 
 export class Organizer {
   constructor(readonly store: Store, readonly now = () => Date.now()) {}
-  private base(tenantId: string, entityId = id()) {
+  private base(tenantId: string, entityId: string = id()) {
     return { id: entityId, tenantId, version: 0, createdAt: new Date(this.now()).toISOString() };
   }
   private async settings(tx: Tx, tenant: string): Promise<OrganizerSettings> {
@@ -105,7 +105,7 @@ export class Organizer {
     requireWrite(identity);
     const b = object(input), action = text(b.action, 'Akcja', 80);
     const tenant = organizerNamespace(identity);
-    let resultDate = '';
+    let resultDate = '', changedEntityId = '';
     await this.store.transaction(async tx => {
       const settings = await this.settings(tx, tenant);
       const date = b.date === undefined ? dateKey(this.now(), settings.timezone) : validDate(b.date);
@@ -177,11 +177,11 @@ export class Organizer {
             plan.priorityIds.push(e.id);
           }
           if (!plan.currentEntryId) plan.currentEntryId = e.id;
-          await tx.put('organizer-entry', { ...e, status: 'ready', updatedAt: at }, e.version);
+          await tx.put<OrganizerEntry>('organizer-entry', { ...e, status: 'ready', updatedAt: at }, e.version);
         } else if (action === 'priority.remove') {
           idleEntry(e); plan.priorityIds = plan.priorityIds.filter(x => x !== e.id);
           if (plan.currentEntryId === e.id) plan.currentEntryId = '';
-          if (e.status === 'ready') await tx.put('organizer-entry', { ...e, status: 'inbox', updatedAt: at }, e.version);
+          if (e.status === 'ready') await tx.put<OrganizerEntry>('organizer-entry', { ...e, status: 'inbox', updatedAt: at }, e.version);
         } else {
           if (!plan.priorityIds.includes(e.id) || ['done', 'archived'].includes(e.status)) throw new OsaError('INVALID_STATE', 'Wybierz jeden z aktywnych priorytetów.', 409);
           if (active && active.entryId !== e.id) throw new OsaError('BLOCK_ACTIVE', 'Zakończ obecny blok przed zmianą pracy.', 409);
@@ -246,7 +246,7 @@ export class Organizer {
           }
           if (!next.currentEntryId) next.currentEntryId = tomorrow.id;
           await tx.put('organizer-day', next, next.version);
-          if (tomorrow.status !== 'ready') tomorrow = await tx.put('organizer-entry', { ...tomorrow, status: 'ready', updatedAt: at }, tomorrow.version);
+          if (tomorrow.status !== 'ready') tomorrow = await tx.put<OrganizerEntry>('organizer-entry', { ...tomorrow, status: 'ready', updatedAt: at }, tomorrow.version);
         }
         let seconds = 0;
         for (const blockId of plan.blockIds) {
@@ -260,10 +260,16 @@ export class Organizer {
         await tx.put('organizer-closure', closure, 0);
         plan.closureId = closure.id; await savePlan();
       } else throw new OsaError('INVALID_ACTION', 'Nieznana akcja organizera.');
+      changedEntityId = entityId;
       await tx.append({ tenantId: tenant, subject: identity.subject, type: 'organizer.' + action,
         entityId, at, payload: { date } });
     });
     // Store reads must happen after the transaction leaves the SQLite serial gate.
-    return this.snapshot(identity, resultDate);
+    const snapshot = await this.snapshot(identity, resultDate);
+    if (changedEntityId !== resultDate && !snapshot.entries.some(e => e.id === changedEntityId)) {
+      const changed = await this.store.read(tx => tx.get<OrganizerEntry>(tenant, 'organizer-entry', changedEntityId));
+      if (changed) snapshot.entries.push(changed);
+    }
+    return snapshot;
   }
 }

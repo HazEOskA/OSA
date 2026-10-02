@@ -431,7 +431,7 @@ export default function App() {
     );
   if (view === 'day') return <Organizer identity={identity} api={api}
     onNavigate={(v) => navigate(v)}
-    onTool={(id, taskContext) => { setEngineId(id); setContext(taskContext); setResult(undefined); setAttachMission(false); navigate('engines'); }}
+    onTool={(id, taskContext) => { setEngineId(id); setContext(taskContext); setUrl(''); setWebSearch(false); setResult(undefined); setAttachMission(false); navigate('engines'); }}
     onLogout={async () => { stopShare(); await api('/api/auth/logout', 'POST', {}); setIdentity(undefined); setBoot(undefined); setContext(''); setArtifact(''); setTitle(''); setObservation(''); setResult(undefined); setView('day'); }} />;
   return (
     <div className={'app ' + (focused ? 'focus' : '')}>

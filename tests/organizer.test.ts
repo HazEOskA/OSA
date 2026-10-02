@@ -50,7 +50,7 @@ test('personal namespace separates colleagues, tenants and reader writes', () =>
   assert.equal((await o.snapshot({ ...owner, role: 'reader' })).entries[0]!.text, 'Prywatna myśl');
 }));
 test('three priorities, one selected task, explicit next step and stale plan conflict', () => fixture(async o => {
-  const entries = [];
+  const entries: OrganizerEntry[] = [];
   for (let i = 0; i < 4; i++) entries.push(await capture(o, 'Zadanie ' + i));
   let s = await o.snapshot(owner);
   for (const e of entries.slice(0, 3)) s = await o.act(owner, { action: 'priority.add', id: e.id, version: s.plan.version });
@@ -173,6 +173,8 @@ test('bounded history retains pinned old task/block and inbox pagination loses n
   do { const page = await o.inbox(owner, cursor); ids.push(...page.items.map(e => e.id)); cursor = page.nextCursor; } while (cursor);
   assert.equal(ids.length, 205);
   assert.equal(new Set(ids).size, 205);
+  const moved = await o.act(owner, { action: 'move', id: 'new-0000', version: 1, status: 'archived' });
+  assert.equal(moved.entries.find(e => e.id === 'new-0000')!.status, 'archived', 'mutation response refreshes older paginated records');
 }));
 test('PostgreSQL organizer: independent connections allow only one block start', { skip: !process.env.OSA_TEST_DATABASE_URL }, async () => {
   const a = new PostgresStore(process.env.OSA_TEST_DATABASE_URL!), b = new PostgresStore(process.env.OSA_TEST_DATABASE_URL!);
