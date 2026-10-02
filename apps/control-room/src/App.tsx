@@ -129,26 +129,47 @@ export default function App() {
     }
   }
   useEffect(() => {
-    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
-    const parameters = new URLSearchParams(location.hash.slice(1));
-    const launchToken = local ? parameters.get('osa-token') : null;
-    // Consume a local launch credential before any fetch. It never enters
-    // a query string, browser storage, referrer or API access log.
-    if (launchToken) history.replaceState(null, '', location.pathname + location.search);
+    let active = true, sequence = 0;
     const connect = async () => {
-      const r = launchToken && /^[A-Za-z0-9_-]{43}$/.test(launchToken)
-        ? await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: launchToken }) })
-        : await fetch('/api/auth/me');
-      if (r.ok) {
-        const data = await r.json();
-        setIdentity(data.identity); setCsrf(data.csrf || '');
-        const b = await fetch('/api/bootstrap');
-        if (b.ok) setBoot(await b.json());
-      } else if (launchToken) setError('Nie udało się otworzyć prywatnej sesji. Użyj tokenu dostępu.');
+      const request = ++sequence;
+      const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+      const parameters = new URLSearchParams(location.hash.slice(1));
+      const launchToken = local ? parameters.get('osa-token') : null;
+      // Consume a local launch credential before any fetch, including when
+      // the launcher returns to an already open tab after logout.
+      if (launchToken) history.replaceState(null, '', location.pathname + location.search);
+      try {
+        const r = launchToken && /^[A-Za-z0-9_-]{43}$/.test(launchToken)
+          ? await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: launchToken }) })
+          : await fetch('/api/auth/me');
+        if (!active || request !== sequence) return;
+        if (r.ok) {
+          const data = await r.json();
+          if (!active || request !== sequence) return;
+          setIdentity(data.identity); setCsrf(data.csrf || ''); setError('');
+          const b = await fetch('/api/bootstrap');
+          if (b.ok) {
+            const boot = await b.json();
+            if (active && request === sequence) setBoot(boot);
+          }
+        } else if (launchToken) setError('Nie udało się otworzyć prywatnej sesji. Użyj tokenu dostępu.');
+      } catch {
+        if (active && request === sequence) setError('Brak połączenia z OSA.');
+      } finally {
+        if (active && request === sequence) setReady(true);
+      }
     };
-    void connect().catch(() => setError('Brak połączenia z OSA.')).finally(() => setReady(true));
-    return () => stream.current?.getTracks().forEach(t => t.stop());
+    const onLaunch = () => {
+      if (new URLSearchParams(location.hash.slice(1)).has('osa-token')) void connect();
+    };
+    window.addEventListener('hashchange', onLaunch);
+    void connect();
+    return () => {
+      active = false; sequence++;
+      window.removeEventListener('hashchange', onLaunch);
+      stream.current?.getTracks().forEach(t => t.stop());
+    };
   }, []);
   useEffect(() => {
     if (!identity) return;

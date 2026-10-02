@@ -56,6 +56,7 @@ async function capture(text) {
 }
 const inboxRow = text => page.locator('.o-inbox-row').filter({ has: page.getByRole('button', { name: text, exact: true }) });
 async function screenshot(name, preview = false) {
+  await page.evaluate(() => scrollTo(0, 0));
   await page.screenshot({ path: 'qa/organizer-' + name + '.png', fullPage: true });
   if (preview && process.env.OSA_QA_IMAGE_LOG === 'true') {
     const jpeg = await page.screenshot({ type: 'jpeg', quality: 65, fullPage: name === 'mobile' });
@@ -65,7 +66,7 @@ async function screenshot(name, preview = false) {
 try {
   app = start(); await ready();
   browser = await chromium.launch({ headless: true, ...(process.env.OSA_QA_CHROMIUM ? { executablePath: process.env.OSA_QA_CHROMIUM } : {}) });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pl-PL', timezoneId: 'Europe/Amsterdam' });
   page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
