@@ -1,0 +1,48 @@
+name: OSA verification
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: osa_test
+          POSTGRES_USER: osa
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U osa -d osa_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      OSA_TEST_DATABASE_URL: postgresql://osa:ci-only-password@127.0.0.1:5432/osa_test
+      OSA_AI_PROVIDER: disabled
+      OSA_POSTGRES_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run setup
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: control-room-browser-proof
+          path: qa/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+      - run: docker build -t osa-infra:ci .
+      - run: docker compose --env-file .env -f infra/compose.yml up --build --wait
+      - run: npm run test:compose
+      - if: always()
+        run: docker compose --env-file .env -f infra/compose.yml down --volumes

@@ -1,0 +1,41 @@
+{
+  "name": "osa-infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "typecheck": "tsc --noEmit && tsc -p apps/control-room/tsconfig.json --noEmit",
+    "build": "tsc && vite build --config apps/control-room/vite.config.ts",
+    "start": "node --env-file-if-exists=.env dist/apps/api/src/main.js",
+    "worker": "node --env-file-if-exists=.env dist/packages/runtime/src/main.js",
+    "mcp": "node --env-file-if-exists=.env dist/apps/mcp/src/main.js",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test:postgres": "node --test dist/tests/postgres.test.js",
+    "test:browser": "node scripts/browser-check.mjs",
+    "test:compose": "node scripts/compose-check.mjs",
+    "dev": "node scripts/dev.mjs",
+    "verify": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "pg": "8.23.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "playwright": "^1.63.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0"
+  }
+}

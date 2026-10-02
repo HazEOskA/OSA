@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: osa
+      POSTGRES_USER: osa
+      POSTGRES_PASSWORD: ${OSA_POSTGRES_PASSWORD:?Set OSA_POSTGRES_PASSWORD locally}
+    volumes:
+      - osa-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U osa -d osa']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  api:
+    build: ..
+    env_file: ../.env
+    environment:
+      OSA_HOST: 0.0.0.0
+      OSA_PORT: '3000'
+      OSA_DB_KIND: postgres
+      DATABASE_URL: postgresql://osa:${OSA_POSTGRES_PASSWORD}@postgres:5432/osa
+      OSA_PUBLIC_URL: ${OSA_PUBLIC_URL:-http://127.0.0.1:3000}
+      OSA_EMBEDDED_WORKER: 'false'
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  worker:
+    build: ..
+    env_file: ../.env
+    environment:
+      OSA_DB_KIND: postgres
+      DATABASE_URL: postgresql://osa:${OSA_POSTGRES_PASSWORD}@postgres:5432/osa
+      OSA_WORKER_ID: compose-worker
+    command: ['node', 'dist/packages/runtime/src/main.js']
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  osa-postgres:
