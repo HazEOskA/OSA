@@ -44,7 +44,7 @@ export class Worker {
       const result = await engine.execute(run.input, {
         identity: {
           tenantId: run.tenantId,
-          subject: 'worker:' + this.workerId,
+          subject: run.requestedBy || 'worker:' + this.workerId,
           role: 'owner',
         },
         signal: control.signal,

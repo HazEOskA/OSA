@@ -231,6 +231,7 @@ export class Kernel {
     tx: Tx,
     identity: Identity,
     input: Record<string, unknown>,
+    origin?: { requestedBy?: string; trigger: 'manual' | 'schedule' },
   ) {
     const engine = text(input.engine, 'Silnik', 60);
     if (!(engineIds as readonly string[]).includes(engine))
@@ -252,6 +253,9 @@ export class Kernel {
     const requestDigest = digest({ engine, input: data, missionId });
     const existing = await tx.byIdempotency(identity.tenantId, key);
     if (existing) {
+      const requestedBy = origin ? origin.requestedBy : identity.subject;
+      if (existing.requestedBy && existing.requestedBy !== requestedBy)
+        throw new OsaError('IDEMPOTENCY_CONFLICT', 'Ten klucz należy do innego użytkownika.', 409);
       if (existing.requestDigest !== requestDigest)
         throw new OsaError(
           'IDEMPOTENCY_CONFLICT',
@@ -262,6 +266,8 @@ export class Kernel {
     }
     const run: Run = {
       ...this.base(identity),
+      requestedBy: origin ? origin.requestedBy : identity.subject,
+      trigger: origin?.trigger || 'manual',
       missionId,
       engine,
       input: data,
@@ -545,6 +551,7 @@ export class Kernel {
     return this.store.transaction(async (tx) => {
       const schedule: Schedule = {
         ...this.base(identity),
+        ownerSubject: identity.subject,
         title: text(input.title, 'Nazwa', 240),
         enabled: true,
         engine: 'daily-report',
@@ -605,7 +612,7 @@ export class Kernel {
             timezone: s.timezone,
           },
           idempotencyKey: `schedule:${s.id}:${dateKey(s.nextRunAt, s.timezone)}`,
-        });
+        }, { requestedBy: s.ownerSubject, trigger: 'schedule' });
         await tx.put(
           'schedule',
           {

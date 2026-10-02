@@ -26,6 +26,8 @@ export interface Mission extends Entity {
 export type RunStatus =
   'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 export interface Run extends Entity {
+  requestedBy?: string;
+  trigger?: 'manual' | 'schedule';
   missionId?: string;
   engine: string;
   input: Record<string, unknown>;
@@ -74,6 +76,7 @@ export interface Approval extends Entity {
   decidedAt?: string;
 }
 export interface Schedule extends Entity {
+  ownerSubject?: string;
   title: string;
   enabled: boolean;
   engine: 'daily-report';
@@ -120,7 +123,8 @@ export type Kind =
   | 'organizer-day'
   | 'organizer-settings'
   | 'organizer-block'
-  | 'organizer-closure';
+  | 'organizer-closure'
+  | 'organizer-report';
 export interface Page<T> {
   items: T[];
   nextCursor?: string;
@@ -167,6 +171,7 @@ export interface OrganizerDay extends Entity {
   completedIds: string[];
   blockIds: string[];
   closureId?: string;
+  reportId?: string;
 }
 export interface OrganizerSettings extends Entity {
   timezone: string;
@@ -196,6 +201,19 @@ export interface OrganizerClosure extends Entity {
   tomorrowDate: string;
   tomorrow: OrganizerEntry | null;
 }
+export interface OrganizerReport extends Entity {
+  date: string;
+  timezone: string;
+  generatedAt: string;
+  source: 'manual' | 'schedule';
+  done: OrganizerEntry[];
+  unfinished: OrganizerEntry[];
+  seconds: number;
+  nextStep: string;
+  notes: string;
+  blocker: string;
+  blockOpen: boolean;
+}
 export interface OrganizerSnapshot {
   date: string;
   serverNow: string;
@@ -205,6 +223,7 @@ export interface OrganizerSnapshot {
   blocks: OrganizerBlock[];
   activeBlock: OrganizerBlock | null;
   closures: OrganizerClosure[];
+  reports: OrganizerReport[];
   plans: OrganizerDay[];
-  coverage: { entriesHaveMore: boolean; blocksHaveMore: boolean; plansHaveMore: boolean };
+  coverage: { entriesHaveMore: boolean; blocksHaveMore: boolean; plansHaveMore: boolean; reportsHaveMore: boolean };
 }

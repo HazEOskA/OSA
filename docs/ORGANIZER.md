@@ -73,3 +73,21 @@ Publiczny ChatGPT adapter wymaga HTTPS MCP, OAuth z mapowaniem subject, właści
 CI uruchamia strict TypeScript, build, testy kernela/API/MCP/organizera/PostgreSQL, dawny przepływ infrastruktury i nowy przepływ organizera w Playwright, a następnie Docker/Compose. Zrzuty: pusty dzień, desktop, focus, mobile 390px i domknięcie. Wynik konkretnego run należy sprawdzić w GitHub Actions; historia wcześniejszych testów infrastruktury nie jest dowodem nowego UI.
 
 Nie ma lokalnej kolejki offline: formularz zachowuje niezapisany tekst po błędzie, a zmiana wymaga odpowiedzi serwera. Należy rozważyć szyfrowany eksport/backup danych oraz retencję przed hostingiem dla wielu użytkowników. Historia jest paginowana i ma jawne coverage; nie jest udawana jako kompletna. Native shell na lekkim laptopie pozostaje następnym etapem, po pomiarach pamięci, startu i uprawnień hosta.
+
+## Wspólna przestrzeń i osobisty raport
+
+Organizera nie odmontowuje przejście do projektu, narzędzia, sesji nauki lub platformy. Formularze modułów otwierają się w pracowni na tym samym ekranie; prywatny plan, szkic skrzynki i zegar pozostają aktywne. Narzędzia są dostępne także bez wybranej pracy. Samo ich otwarcie niczego nie zleca.
+
+`report.generate` zapisuje osobisty snapshot bez zamykania dnia. Snapshot przechowuje ukończone wpisy, otwarte priorytety, czas z bloków, konkretny następny krok oraz istniejące notatki domknięcia. Późniejsza edycja wpisu nie zmienia raportu. Raport uwzględniający otwarty blok wyraźnie zaznacza chwilę pomiaru.
+
+Nowe harmonogramy zapisują `ownerSubject` z uwierzytelnionej tożsamości. Kernel wiąże `requestedBy` i `trigger` z rzeczywistym wywołaniem; body nie wybiera właściciela. Worker generuje raport w prywatnym namespace tej osoby. Wspólny wynik `daily-report` i evidence nie zawierają tekstu prywatnych zadań. Starszy harmonogram bez znanego właściciela nadal tworzy raport projektu, lecz nie przypisuje osobistego raportu przypadkowemu użytkownikowi.
+
+`GET /api/organizer/reports?cursor=...` udostępnia paginowaną historię prywatnych raportów. Snapshot zawiera ostatnie 30 oraz przypięty raport wybranego dnia; coverage sygnalizuje dalszą historię.
+
+## Launcher
+
+`Uruchom-OSA.cmd` używa dołączonego `runtime/node.exe` w pakiecie Windows lub Node.js 24+ w repo. Nie nadpisuje istniejącej konfiguracji, nie zatrzymuje obcego procesu na porcie i nie zmienia konfiguracji Codex/Windows. Proces API działa na loopback; dane pozostają w instalacji aplikacji.
+
+Lokalny credential jest przekazywany w fragmencie adresu wyłącznie na loopback i usuwany z historii przed pierwszym żądaniem. Nie trafia do query string, storage przeglądarki ani logu HTTP. Autoryzacja nadal korzysta z dotychczasowej sesji HttpOnly i CSRF. Nie jest to publiczny mechanizm OAuth.
+
+CI Windows sprawdza rzeczywisty pierwszy start oraz ponowny start gotowego pakietu z jego własnym runtime. Dystrybucja zawiera licencję Node.js i zależności produkcyjne; nie zawiera .env, danych, tokenów ani zrzutów z testów.

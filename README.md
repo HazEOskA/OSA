@@ -1,4 +1,17 @@
-# OSA — infrastruktura pod framework
+# OSA — Twoje centrum pracy
+
+## Dashboard Windows
+
+Pobierz artefakt **osa-dashboard-windows** z zielonego run w [GitHub Actions](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml), wypakuj cały folder i kliknij **Uruchom-OSA.cmd**. Pakiet zawiera Node.js i gotowy interfejs; pierwszy start tworzy lokalną konfigurację i prywatny magazyn danych. Launcher otwiera sesję w przeglądarce bez ręcznego wklejania tokenu.
+
+Organizer, Prompt God, raporty i kontrola składni działają bez klucza modelu. Narzędzia generatywne wymagają skonfigurowanego modelu. Raport wieczorny powstaje, gdy proces OSA jest uruchomiony.
+
+**Mój dzień pozostaje otwarty podczas pracy w modułach.** Pracownia udostępnia projekty, wszystkie silniki, akademię, certyfikat, harmonogram i platformę również przed wybraniem zadania. Niezapisany szkic oraz stan organizera nie znikają przy zmianie modułu.
+
+Raport osobistego dnia korzysta z zadań organizera i zegara serwera. Harmonogram zapamiętuje właściciela; treść osobistych raportów trafia do prywatnego namespace, a wspólna historia projektu otrzymuje wyłącznie informację o zapisaniu raportu.
+
+Przy pracy ze źródłami: `npm ci`, `npm run build`, następnie `npm run dashboard`. Zachowuj **data/** i **.env** przy przenoszeniu własnej instalacji i nie publikuj ich.
+
 
 [![OSA verification](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml/badge.svg)](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml)
 

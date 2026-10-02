@@ -1,12 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
-import type { Identity, OrganizerBlock, OrganizerClosure, OrganizerEntry, OrganizerSnapshot, Page } from '../../../packages/kernel/src/contracts';
+import type { CSSProperties, ReactNode } from 'react';
+import type { Identity, Mission, Schedule, OrganizerBlock, OrganizerClosure, OrganizerEntry, OrganizerReport, OrganizerSnapshot, Page } from '../../../packages/kernel/src/contracts';
 
 type Api = <T>(path: string, method?: string, body?: unknown) => Promise<T>;
+type WorkspaceView = 'day' | 'room' | 'engines' | 'runs' | 'proof' | 'learn' | 'rhythm' | 'platform';
 type Props = {
+  workspace?: ReactNode;
+  workspaceView: WorkspaceView;
+  workspaceName: string;
+  globalError: string;
+  onClearGlobalError: () => void;
+  projects: Mission[];
+  schedules: Schedule[];
+  modelReady: boolean;
+  onSchedule: (hour: number, minute: number, timezone: string) => Promise<void>;
   identity: Identity;
   api: Api;
-  onNavigate: (view: 'room' | 'engines' | 'platform') => void;
+  onNavigate: (view: WorkspaceView) => void;
   onTool: (engine: string, context: string) => void;
   onLogout: () => Promise<void>;
 };
@@ -15,7 +25,7 @@ const listLabels: Record<List, string> = { inbox: 'Skrzynka', later: 'Później'
 const tools = [
   ['prompt', 'Prompt God'], ['research', 'Research'], ['review', 'Code Review'],
   ['leads', 'Lead Engine'], ['mail', 'Cold Mailing'], ['academy', 'Akademia'],
-  ['profile', 'Profile Engine'], ['labs', 'OSA Labs'], ['certificate', 'Certyfikat'],
+  ['profile', 'Profile Engine'], ['labs', 'OSA Labs'], ['certificate', 'OSA Certyfikat'], ['radar', 'Radar ofert'],
 ] as const;
 const label = (entry: { text: string }) => entry.text.trim().split('\n')[0]!.slice(0, 200);
 const nextDate = (date: string) => new Date(Date.parse(date + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10);
@@ -65,7 +75,19 @@ function EntryEditor({ entry, busy, error, readOnly, onSave, onClose, onReload }
   </dialog>;
 }
 
-export default function Organizer({ identity, api, onNavigate, onTool, onLogout }: Props) {
+function DailyReport({ report }: { report: OrganizerReport }) {
+  return <article className="o-daily-report" aria-label="Raport osobistego dnia">
+    <div className="o-report-meta"><span>{report.source === 'schedule' ? 'Z harmonogramu' : 'Na wywołanie'}</span><time>{new Date(report.generatedAt).toLocaleString('pl-PL', { timeZone: report.timezone })}</time></div>
+    <div className="o-report-totals"><p><strong>{report.done.length}</strong> ukończone</p><p><strong>{report.unfinished.length}</strong> otwarte priorytety</p><p><strong>{Math.floor(report.seconds / 60)}</strong> min pracy</p></div>
+    <div className="o-report-columns"><section><h3>Co skończone</h3>{report.done.length ? report.done.map(e => <details key={e.id}><summary>{label(e)}</summary><p className="o-fulltext">{e.text}</p></details>) : <p>Nie oznaczono ukończonej pracy.</p>}</section>
+      <section><h3>Do dokończenia</h3>{report.unfinished.length ? report.unfinished.map(e => <details key={e.id}><summary>{label(e)}</summary><p className="o-fulltext">{e.text}</p>{e.nextStep && <p>Następny krok: {e.nextStep}</p>}</details>) : <p>Nie zostały otwarte priorytety.</p>}</section></div>
+    {report.nextStep && <div className="o-report-next"><span>Najbliższy krok</span><p>{report.nextStep}</p></div>}
+    {report.notes && <p className="o-fulltext">{report.notes}</p>}
+    {report.blocker && <p className="o-fulltext">Przeszkoda: {report.blocker}</p>}
+    <p className="o-footnote">{report.blockOpen ? 'Raport uwzględnia trwający blok w chwili zapisu. ' : ''}Zapis zachowuje stan dnia. Oznaczenia ukończenia są Twoją deklaracją.</p>
+  </article>;
+}
+export default function Organizer({ identity, api, onNavigate, onTool, onLogout, workspace, workspaceView, workspaceName, globalError, onClearGlobalError, projects, schedules, modelReady, onSchedule }: Props) {
   const [data, setData] = useState<OrganizerSnapshot>();
   const [chosenDate, setChosenDate] = useState('');
   const [error, setError] = useState('');
@@ -84,6 +106,10 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
   const [timezone, setTimezone] = useState('Europe/Amsterdam');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [eveningOpen, setEveningOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('21:00');
+  const [scheduleBusy, setScheduleBusy] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState('');
   const [notes, setNotes] = useState('');
   const [blocker, setBlocker] = useState('');
   const [tomorrowId, setTomorrowId] = useState('');
@@ -115,6 +141,9 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
     return () => { sequence.current++; clearInterval(poll); clearInterval(ticker); document.removeEventListener('visibilitychange', resume); };
   }, [identity.tenantId, identity.subject]);
   useEffect(() => { if (!busyRef.current) void load(chosenDate); }, [chosenDate]);
+  useEffect(() => {
+    if (workspace && !focused) document.getElementById('o-workspace-panel')?.scrollIntoView({ behavior: 'instant', block: 'start' });
+  }, [workspaceView]);
   useEffect(() => { setPageEntries([]); setCursor(undefined); setPageLoaded(false); pageSequence.current++; }, [list, chosenDate]);
   useEffect(() => { if (data) setPageEntries(old => old.map(e => data.entries.find(x => x.id === e.id) || e)); }, [data]);
 
@@ -165,19 +194,20 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
   const dateTitle = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(data.date + 'T12:00:00Z'));
   const tomorrowDate = nextDate(data.date);
   const tomorrowPlan = data.plans.find(p => p.date === tomorrowDate);
+  const reports = data.reports || [];
+  const dayReport = reports.find(r => r.id === selectedReportId) || reports.find(r => r.id === plan.reportId) || reports.find(r => r.date === data.date);
+  const personalSchedule = schedules.find(s => s.ownerSubject === identity.subject && s.enabled);
+  const activeProjects = projects.filter(p => !['completed', 'cancelled'].includes(p.status));
   function openEditor(entry: OrganizerEntry) { setError(''); setEditor(entry); }
   const taskContext = current ? ['Praca: ' + current.text, 'Następny krok: ' + (current.nextStep || 'do ustalenia'), 'Dzień: ' + data.date, 'Dostępny czas: ' + plan.availableMinutes + ' min.', 'To jest kontekst użytkownika, nie niezależny dowód wykonania.'].join('\n') : '';
 
   return <div className={'o-shell' + (focused ? ' o-focused' : '')}>
-    <header className="o-header">
-      <button className="o-brand" aria-label="OSA — Mój dzień" onClick={() => { setFocused(false); setChosenDate(''); }}><span>OSA</span><small>build</small></button>
-      {!focused && <nav aria-label="Główna nawigacja" className="o-nav"><button aria-current="page">Mój dzień</button><button onClick={() => onNavigate('room')}>Projekty</button><button onClick={() => onNavigate('engines')}>Narzędzia</button><button onClick={() => onNavigate('platform')}>Zaplecze</button></nav>}
-      <div className="o-account"><span className={'o-connection ' + connection}><i />{connection === 'ok' ? 'Zapis w OSA' : 'Brak połączenia'}</span><span className="o-person">{identity.subject}</span><button aria-label="Wyloguj" onClick={async () => { try { await onLogout(); } catch (e) { setError(e instanceof Error ? e.message : 'Nie udało się wylogować.'); } }}>Wyloguj</button></div>
-    </header>
     <main className="o-main">
+      <div className="o-intro"><button className="o-brand" aria-label="OSA — Mój dzień" onClick={() => { setFocused(false); setChosenDate(''); onNavigate('day'); }}><span>OSA</span><small>build</small></button><p>Twoja przestrzeń.<br /><strong>Twój następny ruch.</strong></p><div className={'o-connection ' + connection}><i />{connection === 'ok' ? 'Zapisane w OSA' : 'Brak połączenia'}</div></div>
       <div className="o-dayline"><div><span className="o-date">{dateTitle}</span><span className="o-private">Twoja prywatna przestrzeń</span></div>
         {focused ? <button className="o-focus-exit" onClick={() => setFocused(false)}>Wyjdź ze skupienia</button> : <div className="o-day-actions"><label className="o-date-picker"><span className="sr-only">Wybierz dzień</span><input type="date" aria-label="Wybierz dzień" value={data.date} disabled={busy} onChange={e => { if (e.target.value) { setChosenDate(e.target.value); setEveningOpen(false); } }} /></label><button disabled={busy} onClick={() => { setBudget(String(plan.availableMinutes)); setTimezone(settings.timezone); setSettingsOpen(x => !x); }}>Mam {plan.availableMinutes} min</button><button className="o-evening-button" onClick={() => { setEveningOpen(true); setTimeout(() => document.getElementById('o-evening')?.scrollIntoView({ behavior: 'instant', block: 'start' }), 0); }}>{closed ? 'Zapis dnia' : 'Domknij dzień'}</button></div>}
       </div>
+      {globalError && <div className="o-error" role="alert"><p>{globalError}</p><button aria-label="Zamknij błąd" onClick={onClearGlobalError}>×</button></div>}
       {readOnly && <p className="o-callout">Konto z dostępem do odczytu. Możesz przeglądać własny plan.</p>}
       {error && !editor && <div className="o-error" role="alert"><p>{error}</p><button aria-label="Zamknij błąd" onClick={() => setError('')}>×</button></div>}
       {notice && <p className="o-notice" role="status">{notice}</p>}
@@ -190,13 +220,13 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
       <section className="o-now" aria-labelledby="o-now-title">
         <div className="o-now-copy">
           <div className="o-now-label"><span>Teraz</span><div><i />{closed && !activeBlock ? 'Dzień domknięty' : activeBlock?.status === 'paused' ? 'Blok w pauzie' : activeBlock ? 'Jedna rzecz w toku' : 'Twój następny ruch'}</div></div>
-          <h1 id="o-now-title">{current ? label(current) : closed ? 'Odłóż ten dzień.\nWrócisz jutro.' : 'Zrób miejsce\nna jedną rzecz.'}</h1>
+          <h1 id="o-now-title">{current ? label(current) : closed ? 'Odłóż ten dzień.\nWrócisz jutro.' : 'Ustaw swój dzień.'}</h1>
           {current ? <>
             <div className="o-next-step"><span>Następny krok</span><p>{activeBlock?.nextStep || current.nextStep || 'Zapisz pierwszy mały krok. To wystarczy, żeby zacząć.'}</p>{!activeBlock && <button onClick={() => openEditor(current)} disabled={disabled || closed}>{current.nextStep ? 'Edytuj zadanie' : 'Zapisz następny krok'}</button>}</div>
             <div className="o-now-actions"><button className="o-primary" disabled={disabled || !!activeBlock || closed} onClick={async () => { if (await act({ action: 'block.start', id: current.id, version: plan.version, settingsVersion: settings.version, minutes: duration })) { setFocused(true); setNotice('Blok rozpoczęty. Teraz tylko ta jedna rzecz.'); } }}>Rozpocznij blok <span>↗</span></button><button disabled={disabled || !!activeBlock || closed} onClick={() => act({ action: 'complete', id: current.id, version: current.version })}>Oznacz ukończenie</button>{!focused && <button className="o-quiet" onClick={() => setFocused(true)}>Skup się</button>}</div>
             {activeBlock?.date !== undefined && activeBlock.date !== data.date && <p className="o-callout">Otwarty blok pochodzi z {activeBlock.date}. Zakończ go przed nową pracą.</p>}
           </> : <>
-            <p className="o-now-empty">{closed ? 'Twój zapis jest poniżej. Jedna wybrana praca może czekać na jutro.' : 'Zapisz, co masz w głowie. Wybierz najwyżej trzy sprawy na dziś i jedną, od której zaczniesz.'}</p>
+            <p className="o-now-empty">{closed ? 'Twój zapis jest poniżej. Jedna wybrana praca może czekać na jutro.' : 'Zapisz to, co masz w głowie. Wybierz trzy priorytety i jeden pierwszy krok.'}</p>
             {!closed && <button className="o-primary" onClick={() => { setFocused(false); setTimeout(() => { captureRef.current?.focus(); captureRef.current?.scrollIntoView({ behavior: 'instant', block: 'center' }); }, 0); }}>Zrzuć myśli do skrzynki <span>↓</span></button>}
           </>}
         </div>
@@ -224,6 +254,24 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
             <small>Wpis czeka tutaj, dopóki sam go nie wybierzesz.</small>
           </section>
         </div>
+        <section className="o-workbench" aria-label="Pracownia OSA">
+          <div className="o-workbench-heading"><div><h2>Pracownia OSA</h2><p>Projekty, narzędzia i nauka. Twój dzień zostaje tutaj.</p></div><span>{activeProjects.length} aktywne projekty</span></div>
+          <nav className="o-workspace-nav" aria-label="Przestrzenie OSA">
+            {([['day', 'Mój dzień'], ['room', 'Projekty'], ['engines', 'Narzędzia'], ['runs', 'Wykonania'], ['proof', 'Dowody i zgody'], ['learn', 'Akademia / Certyfikat'], ['rhythm', 'Rytm / raporty'], ['platform', 'Platforma']] as const).map(([id, title]) =>
+              <button key={id} aria-pressed={workspaceView === id} onClick={() => onNavigate(id)}>{title}{id === 'room' && activeProjects.length > 0 && <small>{activeProjects.length}</small>}</button>)}
+          </nav>
+          <section className="o-tools-context" aria-label="Narzędzia dla bieżącego zadania">
+            <div><h3>{current ? 'Z kontekstem bieżącej pracy' : 'Wybierz narzędzie'}</h3><p>{modelReady ? 'Model połączony.' : 'Prompt God i raporty działają lokalnie. Pozostałe silniki potrzebują modelu.'}</p></div>
+            <div className="o-tool-links">{tools.map(([id, title]) => <button key={id} onClick={() => id === 'certificate' ? onNavigate('learn') : onTool(id, taskContext)}>{title}<span aria-hidden="true">↗</span></button>)}</div>
+          </section>
+          {workspace && <section className="o-workspace-panel" id="o-workspace-panel" aria-label={workspaceName}><div className="o-workspace-heading"><h2>{workspaceName}</h2><button onClick={() => onNavigate('day')}>Zamknij pracownię</button></div>{workspace}</section>}
+        </section>
+        <section className="o-personal-reports" aria-label="Raporty osobiste">
+          <div className="o-reports-heading"><div><h2>Raport dnia</h2><p>{personalSchedule ? 'Wieczorem o ' + String(personalSchedule.hour).padStart(2, '0') + ':' + String(personalSchedule.minute).padStart(2, '0') + ' · ' + personalSchedule.timezone : 'Ukończone, otwarte sprawy i jeden następny krok.'}</p></div><div className="o-actions"><button className="o-primary" disabled={disabled} onClick={async () => { if (await act({ action: 'report.generate' })) { setSelectedReportId(''); setReportOpen(true); } }}>Wygeneruj raport</button>{dayReport && <button onClick={() => setReportOpen(open => !open)}>{reportOpen ? 'Zwiń raport' : 'Pokaż raport'}</button>}</div></div>
+          {!personalSchedule && identity.role === 'owner' && <form className="o-schedule-form" onSubmit={async e => { e.preventDefault(); if (scheduleBusy) return; setScheduleBusy(true); try { const [hour, minute] = scheduleAt.split(':').map(Number); await onSchedule(hour!, minute!, settings.timezone); } finally { setScheduleBusy(false); } }}><label htmlFor="o-schedule-time">Raport co wieczór</label><input id="o-schedule-time" aria-label="Godzina raportu wieczornego" type="time" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} required /><button disabled={disabled || scheduleBusy}>Włącz raport wieczorny</button><span>Raport powstaje, gdy OSA działa.</span></form>}
+          {reportOpen && dayReport && <DailyReport report={dayReport} />}
+          {reports.length > 1 && <details className="o-report-history"><summary>Historia raportów</summary><div>{reports.map(report => <button key={report.id} onClick={() => { setSelectedReportId(report.id); setReportOpen(true); }}>{report.date}<span>{new Date(report.generatedAt).toLocaleTimeString('pl-PL', { timeZone: report.timezone, hour: '2-digit', minute: '2-digit' })}</span></button>)}</div>{data.coverage.reportsHaveMore && <p>Wyświetlono ostatnie 30 raportów oraz raport wybranego dnia.</p>}</details>}
+        </section>
         <section className="o-inbox" aria-label="Zapisane sprawy">
           <div className="o-inbox-heading"><nav className="o-list-tabs" aria-label="Listy organizera">{(Object.keys(listLabels) as List[]).map(bucket => <button key={bucket} aria-pressed={list === bucket} onClick={() => setList(bucket)}>{listLabels[bucket]}{bucket === 'inbox' && <span>{[...entries.values()].filter(e => e.status === 'inbox').length}{data.coverage.entriesHaveMore ? '+' : ''}</span>}</button>)}</nav><span className="o-list-hint">{list === 'inbox' ? 'Zapisane nie znaczy zaplanowane.' : list === 'archived' ? 'Możesz przywrócić pełną treść.' : list === 'later' ? 'Nie wszystko musi wydarzyć się dziś.' : 'Twoje oznaczenia ukończenia.'}</span></div>
           {selectedList.length ? selectedList.map(e => <article className="o-inbox-row" key={e.id}><div><button className="o-entry-title" onClick={() => openEditor(e)}>{label(e)}</button>{e.nextStep && <p>{e.nextStep}</p>}</div><span className="o-estimate">{e.estimateMinutes} min</span><div className="o-inbox-actions">{e.status === 'archived' ? <button disabled={disabled} onClick={() => act({ action: 'restore', id: e.id, version: e.version })}>Przywróć</button> : <>
@@ -233,7 +281,6 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
           </>}</div></article>) : <div className="o-list-empty"><span>{list === 'inbox' ? 'Skrzynka ma miejsce na Twoje myśli.' : list === 'later' ? 'Nic nie czeka na później.' : list === 'archived' ? 'Archiwum jest puste.' : 'Oznacz ukończenie, gdy praca będzie gotowa.'}</span><p>{list === 'inbox' ? 'Zapisz myśl powyżej. Nie musisz od razu znać całego planu.' : 'Tutaj pojawią się Twoje zapisane sprawy.'}</p></div>}
           {data.coverage.entriesHaveMore && (!pageLoaded || cursor) && <button className="o-load-more" disabled={busy} onClick={more}>Pokaż starsze wpisy</button>}
         </section>
-        {current && <section className="o-tools-context" aria-label="Narzędzia dla bieżącego zadania"><div><h2>Potrzebujesz wsparcia?</h2><p>Otwórz narzędzie z kontekstem tej pracy. Uruchomisz je sam.</p></div><div>{tools.map(([id, title]) => <button key={id} onClick={() => onTool(id, taskContext)}>{title}<span>↗</span></button>)}</div></section>}
         <section id="o-evening" className={'o-evening' + (eveningOpen || closed ? ' o-evening-open' : '')} aria-label="Domknięcie dnia">
           <div className="o-evening-heading"><div><span>Na koniec dnia</span><h2>Zostaw sobie dobry punkt powrotu.</h2><p>Co skończone, co zostało i jeden następny ruch.</p></div>{!closed && <button onClick={() => setEveningOpen(x => !x)}>{eveningOpen ? 'Zwiń domknięcie' : 'Domknij dzień'}</button>}</div>
           {closed && closure ? <><Closure report={closure} /><button className="o-primary o-tomorrow-link" onClick={() => { setChosenDate(closure.tomorrowDate); setEveningOpen(false); }}>Przejdź do jutra</button></> : eveningOpen && <form className="o-evening-form" onSubmit={async e => { e.preventDefault(); if (await act({ action: 'close', version: plan.version, notes, blocker, tomorrowId, tomorrowVersion: tomorrowPlan?.version || 0 })) { setNotes(''); setBlocker(''); setTomorrowId(''); setNotice('Dzień domknięty. Zapis i punkt powrotu są zachowane.'); } }}>
@@ -247,7 +294,7 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
         {data.closures.some(c => c.date !== data.date) && <details className="o-history"><summary>Poprzednie domknięcia</summary>{data.closures.filter(c => c.date !== data.date).map(c => <button key={c.id} onClick={() => { setChosenDate(c.date); setEveningOpen(true); }}>{c.date}<span>{c.done.length} ukończone · {Math.floor(c.seconds / 60)} min</span></button>)}</details>}
       </>}
     </main>
-    {!focused && <footer className="o-footer"><span>OSA <i />Twoje miejsce do pracy.</span><span>Jedna rzecz na raz.</span></footer>}
+    <footer className="o-footer"><span>OSA <i />Twoje miejsce do pracy.</span><div><span>{identity.subject} · prywatny organizer</span><button aria-label="Wyloguj" onClick={async () => { try { await onLogout(); } catch (e) { setError(e instanceof Error ? e.message : 'Nie udało się wylogować.'); } }}>Wyloguj</button></div></footer>
     {editor && <EntryEditor key={editor.id + ':' + editor.version} entry={editor} busy={busy} error={error} readOnly={readOnly || closed && plan.priorityIds.includes(editor.id) || activeBlock?.entryId === editor.id} onSave={act} onClose={() => { setEditor(undefined); setError(''); }} onReload={() => { const latest = data.entries.find(e => e.id === editor.id); if (latest) { setEditor(latest); setError(''); } }} />}
   </div>;
 }

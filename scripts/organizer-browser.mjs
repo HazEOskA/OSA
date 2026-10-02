@@ -73,11 +73,21 @@ try {
   const token = (await readFile('data/access-token.txt', 'utf8')).trim();
   await page.getByLabel('Token dostępu').fill(token);
   await page.getByRole('button', { name: 'Wejdź do OSA' }).click();
-  await page.getByRole('heading', { level: 1 }).filter({ hasText: 'Zrób miejsce' }).waitFor();
+  await page.getByRole('heading', { level: 1 }).filter({ hasText: 'Ustaw swój dzień' }).waitFor();
   let s = await snapshot();
   assert.equal(s.entries.length, 0);
   assert.equal(s.blocks.length, 0);
   await screenshot('empty');
+  // All modules are available before selecting a task. Opening one preserves
+  // the organizer draft and does not invoke any model or enqueue a run.
+  await page.getByLabel('Myśl do skrzynki').fill('Niezapisany szkic bez utraty kontekstu');
+  await page.locator('.o-tools-context').getByRole('button', { name: 'Prompt God' }).click();
+  await page.getByLabel('Cel i kontekst').waitFor();
+  assert.equal(await page.getByLabel('Myśl do skrzynki').inputValue(), 'Niezapisany szkic bez utraty kontekstu');
+  assert.equal((await snapshot()).plan.priorityIds.length, 0);
+  assert.equal((await page.evaluate(async ()=>(await (await fetch('/api/runs')).json()).items)).length,0);
+  await page.getByRole('button', { name: 'Zamknij pracownię' }).click();
+  await page.getByLabel('Myśl do skrzynki').fill('');
 
   const firstText = 'Uporządkować dokumentację OSA';
   const first = await capture(firstText);
@@ -127,7 +137,7 @@ try {
   assert.match(await page.getByLabel('Cel i kontekst').inputValue(), /docs\/ORGANIZER\.md/);
   const runs = await page.evaluate(async () => (await (await fetch('/api/runs')).json()).items);
   assert.equal(runs.length, 0, 'opening a contextual tool must not enqueue execution');
-  await page.locator('.command-dock').getByRole('button', { name: 'Mój dzień' }).click();
+  await page.locator('.o-workspace-nav').getByRole('button', { name: 'Mój dzień' }).click();
   await page.getByRole('heading', { level: 1, name: firstText }).waitFor();
   await screenshot('desktop', true);
 
@@ -181,6 +191,17 @@ try {
   await action(page, page.getByRole('dialog').getByRole('button', { name: 'Zapisz następny krok' }));
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
+  const personalReport = await action(page, page.getByRole('button', { name: 'Wygeneruj raport', exact: true }));
+  assert.equal(personalReport.reports[0].done[0].id, first.id);
+  assert.equal(personalReport.reports[0].unfinished.length, 2);
+  await page.getByRole('article', { name: 'Raport osobistego dnia' }).waitFor();
+  assert.match(await page.locator('.o-daily-report').innerText(), /Przejrzeć przepływ logowania/);
+  await page.getByRole('button', { name: 'Zwiń raport' }).click();
+  const scheduleResponse = page.waitForResponse(r=>new URL(r.url()).pathname==='/api/schedules'&&r.request().method()==='POST');
+  await page.getByRole('button', { name:'Włącz raport wieczorny' }).click();
+  assert.equal((await scheduleResponse).status(),201);
+  await page.getByText('Wieczorem o 21:00', { exact:false }).waitFor();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => scrollTo(0, 0));
   await screenshot('mobile', true);
@@ -207,7 +228,12 @@ try {
   assert.deepEqual(errors, []);
   await page.getByRole('button', { name: 'Wyloguj', exact: true }).click();
   await page.getByLabel('Token dostępu').waitFor();
-  console.log('Organizer browser PASS: empty state, full capture/archive restore, 3 priorities/4th retained, next-step guard, budget, context without auto-run, focus, timer reload/two tabs/server restart, completion, mobile overflow, immutable evening snapshot and tomorrow task.');
+  await page.goto(base + '/#osa-token=' + encodeURIComponent(token));
+  await page.locator('.o-now h1').waitFor();
+  assert.equal((await snapshot()).plan.closureId, report.id);
+  assert.equal(new URL(page.url()).hash,'');
+  assert.deepEqual(errors, []);
+  console.log('Organizer browser PASS: empty state, full capture/archive restore, 3 priorities/4th retained, next-step guard, budget, context without auto-run, focus, timer reload/two tabs/server restart, completion, mobile overflow, immutable evening snapshot and tomorrow task; integrated tools, draft preservation, private daily report, owned evening schedule and local automatic login.');
 } catch (e) {
   if (page) {
     try { await page.screenshot({ path: 'qa/organizer-failure.png', fullPage: true }); console.error('Organizer UI at failure: ' + (await page.locator('body').innerText()).slice(0, 2500)); } catch {}

@@ -19,7 +19,10 @@
     "test:compose": "node scripts/compose-check.mjs",
     "dev": "node scripts/dev.mjs",
     "verify": "npm run typecheck && npm test",
-    "test:organizer:browser": "node scripts/organizer-browser.mjs"
+    "test:organizer:browser": "node scripts/organizer-browser.mjs",
+    "dashboard": "node scripts/launch-dashboard.mjs",
+    "package:windows": "node scripts/package-windows.mjs",
+    "test:launcher": "node scripts/launcher-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",

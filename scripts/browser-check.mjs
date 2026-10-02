@@ -96,7 +96,7 @@ try {
   await page.locator('.output .state.succeeded').waitFor({ timeout: 15000 });
   assert.match(await page.locator('.output pre').innerText(), /Exit code: 0/);
   await page
-    .locator('.command-dock')
+    .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Projekty' })
     .click();
   await page
@@ -117,8 +117,8 @@ try {
   await mkdir('qa', { recursive: true });
   await page.screenshot({ path: 'qa/desktop.png', fullPage: true });
   await page
-    .locator('.command-dock')
-    .getByRole('button', { name: 'Proof & zgody' })
+    .locator('.o-workspace-nav')
+    .getByRole('button', { name: 'Dowody i zgody' })
     .click();
   await page
     .getByLabel('Draft / treść do zatwierdzenia')
@@ -131,7 +131,7 @@ try {
   await page.getByRole('button', { name: 'Zatwierdź payload' }).first().click();
   await page.locator('.approval-row').filter({ hasText: 'approved' }).waitFor();
   await page
-    .locator('.command-dock')
+    .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Rytm / raporty' })
     .click();
   await page.getByRole('button', { name: 'Dodaj harmonogram' }).click();
@@ -140,7 +140,7 @@ try {
   await page.locator('.output .state.succeeded').waitFor({ timeout: 15000 });
   assert.match(await page.locator('.output pre').innerText(), /RAPORT OSA/);
   await page
-    .locator('.command-dock')
+    .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Akademia / Certyfikat' })
     .click();
   await page.getByLabel('Temat / cel nauki').fill('QA sesja czytania async');
@@ -159,7 +159,7 @@ try {
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await page
-    .locator('.command-dock')
+    .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Projekty' })
     .click();
   await page.screenshot({ path: 'qa/mobile.png', fullPage: true });
@@ -169,7 +169,7 @@ try {
   }));
   assert.ok(dimensions.width <= dimensions.viewport, 'mobile page overflow');
   await page
-    .locator('.command-dock')
+    .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Platforma' })
     .click();
   await page.screenshot({ path: 'qa/platform-mobile.png', fullPage: true });

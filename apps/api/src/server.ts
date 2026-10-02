@@ -158,6 +158,8 @@ export function createApi(kernel: Kernel, config: ServerConfig) {
           return send(res, 200, await organizer.snapshot(identity, url.searchParams.get('date') || undefined));
         if (path === '/api/organizer' && method === 'POST')
           return send(res, 200, await organizer.act(identity, await body(req)));
+        if (path === '/api/organizer/reports' && method === 'GET')
+          return send(res, 200, await organizer.reports(identity, url.searchParams.get('cursor') || undefined));
         if (path === '/api/organizer/inbox' && method === 'GET')
           return send(res, 200, await organizer.inbox(identity, url.searchParams.get('cursor') || undefined, url.searchParams.get('status') || 'inbox'));
         if (path === '/api/bootstrap' && method === 'GET') {

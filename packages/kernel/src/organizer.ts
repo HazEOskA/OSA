@@ -1,5 +1,5 @@
 import type { Store, Tx } from '../../store/src/store.js';
-import type { Entity, Identity, Kind, OrganizerBlock, OrganizerClosure, OrganizerDay, OrganizerEntry, OrganizerSettings, OrganizerSnapshot, OrganizerStatus } from './contracts.js';
+import type { Entity, Identity, Kind, OrganizerBlock, OrganizerClosure, OrganizerDay, OrganizerEntry, OrganizerReport, OrganizerSettings, OrganizerSnapshot, OrganizerStatus } from './contracts.js';
 import { OsaError } from './contracts.js';
 import { dateKey, digest, id, object, requireWrite, text } from './guards.js';
 
@@ -64,6 +64,7 @@ export class Organizer {
       const blocks = await tx.list<OrganizerBlock>(tenant, 'organizer-block', 200);
       const plans = await tx.list<OrganizerDay>(tenant, 'organizer-day', 30);
       const closures = await tx.list<OrganizerClosure>(tenant, 'organizer-closure', 30);
+      const reports = await tx.list<OrganizerReport>(tenant, 'organizer-report', 30);
       const activeBlock = settings.activeBlockId
         ? await tx.get<OrganizerBlock>(tenant, 'organizer-block', settings.activeBlockId) || null : null;
       // Pinning by id prevents an older task or running block from disappearing
@@ -84,13 +85,17 @@ export class Organizer {
         const closure = await tx.get<OrganizerClosure>(tenant, 'organizer-closure', plan.closureId);
         if (closure) closures.items.push(closure);
       }
+      if (plan.reportId && !reports.items.some(r => r.id === plan.reportId)) {
+        const report = await tx.get<OrganizerReport>(tenant, 'organizer-report', plan.reportId);
+        if (report) reports.items.push(report);
+      }
       if (!plans.items.some(p => p.id === plan.id)) plans.items.unshift(plan);
       // Fetch the next plan explicitly for safe, versioned evening carry-over.
       const tomorrow = await tx.get<OrganizerDay>(tenant, 'organizer-day', nextOrganizerDate(date));
       if (tomorrow && !plans.items.some(p => p.id === tomorrow.id)) plans.items.push(tomorrow);
       return { date, serverNow: new Date(this.now()).toISOString(), settings, plan,
-        entries: entries.items, blocks: blocks.items, activeBlock, closures: closures.items, plans: plans.items,
-        coverage: { entriesHaveMore: !!entries.nextCursor, blocksHaveMore: !!blocks.nextCursor, plansHaveMore: !!plans.nextCursor } };
+        entries: entries.items, blocks: blocks.items, activeBlock, closures: closures.items, reports: reports.items, plans: plans.items,
+        coverage: { entriesHaveMore: !!entries.nextCursor, blocksHaveMore: !!blocks.nextCursor, plansHaveMore: !!plans.nextCursor, reportsHaveMore: !!reports.nextCursor } };
     });
   }
   async inbox(identity: Identity, cursor?: string, status = 'inbox') {
@@ -101,9 +106,51 @@ export class Organizer {
       return { items: page.items.filter(e => e.status === status || (status === 'later' && e.status === 'ready')), nextCursor: page.nextCursor };
     });
   }
+  async generateReport(identity: Identity, requestedDate?: string, generationId?: string, source: 'manual' | 'schedule' = 'manual'): Promise<OrganizerReport> {
+    requireWrite(identity);
+    const tenant = organizerNamespace(identity);
+    const reportId = generationId ? 'report:' + text(generationId, 'Id raportu', 80) : id();
+    return this.store.transaction(async tx => {
+      const settings = await this.settings(tx, tenant);
+      const date = requestedDate ? validDate(requestedDate) : dateKey(this.now(), settings.timezone);
+      const existing = await tx.get<OrganizerReport>(tenant, 'organizer-report', reportId);
+      if (existing) {
+        if (existing.date !== date || existing.source !== source) throw new OsaError('IDEMPOTENCY_CONFLICT', 'Ten raport opisuje inny dzień.', 409);
+        return existing;
+      }
+      const plan = await this.day(tx, tenant, date);
+      const closure = plan.closureId ? await tx.get<OrganizerClosure>(tenant, 'organizer-closure', plan.closureId) : undefined;
+      const done = closure ? closure.done : await Promise.all(plan.completedIds.map(entryId => this.find<OrganizerEntry>(tx, tenant, 'organizer-entry', entryId)));
+      const priorities = closure ? closure.unfinished : await Promise.all(plan.priorityIds.map(entryId => this.find<OrganizerEntry>(tx, tenant, 'organizer-entry', entryId)));
+      const unfinished = priorities.filter(entry => entry.status !== 'done');
+      const blocks = await Promise.all(plan.blockIds.map(blockId => this.find<OrganizerBlock>(tx, tenant, 'organizer-block', blockId)));
+      const current = unfinished.find(entry => entry.id === plan.currentEntryId) || unfinished[0];
+      const report: OrganizerReport = {
+        ...this.base(tenant, reportId), date, timezone: settings.timezone,
+        generatedAt: new Date(this.now()).toISOString(), source, done, unfinished,
+        seconds: closure ? closure.seconds : blocks.reduce((total, block) => total + blockSeconds(block, this.now()), 0),
+        nextStep: closure?.tomorrow?.nextStep || current?.nextStep || '',
+        notes: closure?.notes || '', blocker: closure?.blocker || '',
+        blockOpen: !closure && blocks.some(block => block.status !== 'completed'),
+      };
+      const saved = await tx.put('organizer-report', report, 0);
+      await tx.put('organizer-day', { ...plan, reportId: saved.id }, plan.version);
+      await tx.append({ tenantId: tenant, subject: identity.subject, type: 'organizer.report.generated',
+        entityId: saved.id, at: report.generatedAt, payload: { date, source } });
+      return saved;
+    });
+  }
+  async reports(identity: Identity, cursor?: string) {
+    return this.store.read(tx => tx.list<OrganizerReport>(organizerNamespace(identity), 'organizer-report', 30, cursor));
+  }
   async act(identity: Identity, input: Record<string, unknown>): Promise<OrganizerSnapshot> {
     requireWrite(identity);
     const b = object(input), action = text(b.action, 'Akcja', 80);
+    if (action === 'report.generate') {
+      const date = b.date === undefined ? undefined : validDate(b.date);
+      await this.generateReport(identity, date);
+      return this.snapshot(identity, date);
+    }
     const tenant = organizerNamespace(identity);
     let resultDate = '', changedEntityId = '';
     await this.store.transaction(async tx => {

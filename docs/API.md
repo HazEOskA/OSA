@@ -71,3 +71,10 @@ Reader ma odczyt własnego organizera. POST zachowuje dotychczasowe kontrole Ori
 | close | version planu, notes?, blocker?, tomorrowId?, tomorrowVersion gdy jest tomorrowId | Niezmienny snapshot i atomowe przeniesienie jednej pracy na jutro |
 
 Domknięty plan odrzuca ponowne close oraz start/zmianę priorytetów. Capture pozostaje dostępne. Blok sprzed północy można zakończyć następnego dnia. Limit bezpieczeństwa wynosi 200 ukończeń i 200 bloków na dzień; przekroczenie zwraca DAY_LIMIT zamiast obcinać raport.
+
+### Raport osobistego dnia
+
+- `POST /api/organizer`: `{ action: "report.generate", date? }` — zapisuje immutable snapshot, zachowuje otwarty dzień i zwraca aktualny OrganizerSnapshot.
+- `GET /api/organizer/reports?cursor=...` — prywatny Page<OrganizerReport>.
+- OrganizerSnapshot zawiera `reports` oraz `coverage.reportsHaveMore`; OrganizerDay.reportId przypina najnowszy raport wybranego dnia.
+- Właściciel raportu pochodzi wyłącznie z uwierzytelnionej tożsamości. Zwykłe raporty projektu nie ujawniają jego treści.

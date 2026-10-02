@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { OpenAIAdapter } from '../../adapters/src/openai.js';
 import { readPublicPage } from '../../adapters/src/public-page.js';
+import { Organizer } from '../../kernel/src/organizer.js';
 import { Kernel } from '../../kernel/src/service.js';
 import { OsaError } from '../../kernel/src/contracts.js';
 import { text } from '../../kernel/src/guards.js';
@@ -30,6 +31,13 @@ export function createEngines(
           };
         }
         if (definition.id === 'daily-report') {
+          const personal = context.run.requestedBy
+            ? await new Organizer(kernel.store, kernel.now).generateReport(
+                { ...context.identity, subject: context.run.requestedBy },
+                typeof input.date === 'string' ? input.date : undefined,
+                context.run.id, context.run.trigger === 'schedule' ? 'schedule' : 'manual',
+              )
+            : undefined;
           const report = await kernel.report(
             context.identity,
             typeof input.date === 'string' ? input.date : undefined,
@@ -37,6 +45,7 @@ export function createEngines(
           const lines = [
             `RAPORT OSA / ${report.date}`,
             `Wygenerowano: ${report.generatedAt}`,
+            personal ? 'Raport osobistego dnia zapisano prywatnie. Otwórz Raporty w dashboardzie OSA.' : 'To starszy harmonogram projektu bez przypisanego właściciela; nie utworzono osobistego raportu.',
             `Pokrycie: misje ${report.coverage.missions.included}/${report.coverage.missions.total}, wykonania ${report.coverage.runs.included}/${report.coverage.runs.total}, dowody ${report.coverage.evidence.included}/${report.coverage.evidence.total}.`,
             `Ukończenie misji jest deklaracją; verification wskazuje wykonaną kontrolę.`,
             ...report.nextSteps.map(
@@ -52,7 +61,7 @@ export function createEngines(
             producer: 'osa/kernel-report/1',
             verdict: 'report',
             sources: [],
-            metadata: { coverage: report.coverage },
+            metadata: { coverage: report.coverage, personalReportId: personal?.id, personalReportDate: personal?.date },
           };
         }
         if (definition.id === 'verify-syntax') {

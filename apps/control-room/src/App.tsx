@@ -28,7 +28,7 @@ const areas = [
   { id: 'room', name: 'Projekty', mark: '01' },
   { id: 'engines', name: 'Narzędzia', mark: '02' },
   { id: 'runs', name: 'Wykonania', mark: '03' },
-  { id: 'proof', name: 'Proof & zgody', mark: '04' },
+  { id: 'proof', name: 'Dowody i zgody', mark: '04' },
   { id: 'learn', name: 'Akademia / Certyfikat', mark: '05' },
   { id: 'rhythm', name: 'Rytm / raporty', mark: '06' },
   { id: 'platform', name: 'Platforma', mark: '07' },
@@ -80,7 +80,6 @@ export default function App() {
   const [clock, setClock] = useState(Date.now());
   const [at, setAt] = useState('21:00');
   const [timezone, setTimezone] = useState('Europe/Amsterdam');
-  const [focused, setFocused] = useState(false);
   const mission =
     boot?.report.missions.find((m) => m.id === selected) ||
     boot?.report.missions.find(
@@ -130,19 +129,26 @@ export default function App() {
     }
   }
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(async (r) => {
-        if (r.ok) {
-          const data = await r.json();
-          setIdentity(data.identity);
-          setCsrf(data.csrf || '');
-          const b = await fetch('/api/bootstrap');
-          if (b.ok) setBoot(await b.json());
-        }
-      })
-      .catch(() => setError('Brak połączenia z backendem OSA.'))
-      .finally(() => setReady(true));
-    return () => stream.current?.getTracks().forEach((t) => t.stop());
+    const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+    const parameters = new URLSearchParams(location.hash.slice(1));
+    const launchToken = local ? parameters.get('osa-token') : null;
+    // Consume a local launch credential before any fetch. It never enters
+    // a query string, browser storage, referrer or API access log.
+    if (launchToken) history.replaceState(null, '', location.pathname + location.search);
+    const connect = async () => {
+      const r = launchToken && /^[A-Za-z0-9_-]{43}$/.test(launchToken)
+        ? await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: launchToken }) })
+        : await fetch('/api/auth/me');
+      if (r.ok) {
+        const data = await r.json();
+        setIdentity(data.identity); setCsrf(data.csrf || '');
+        const b = await fetch('/api/bootstrap');
+        if (b.ok) setBoot(await b.json());
+      } else if (launchToken) setError('Nie udało się otworzyć prywatnej sesji. Użyj tokenu dostępu.');
+    };
+    void connect().catch(() => setError('Brak połączenia z OSA.')).finally(() => setReady(true));
+    return () => stream.current?.getTracks().forEach(t => t.stop());
   }, []);
   useEffect(() => {
     if (!identity) return;
@@ -363,18 +369,18 @@ export default function App() {
       </div>
     </article>
   );
-  if (!ready) return <div className="loading">OSA / ŁĄCZENIE Z KERNELEM</div>;
+  if (!ready) return <div className="loading">Otwieram OSA…</div>;
   if (!identity)
     return (
       <div className="login-scene">
         <div className="login-art">
           <div className="tag">
-            OSA<span>BUILD YOUR OWN SYSTEM</span>
+            OSA<span>TWOJE MIEJSCE DO PRACY</span>
           </div>
           <div className="kernel-symbol">
             <span>INTENCJA</span>
             <b>OSA</b>
-            <span>EXECUTION / PROOF</span>
+            <span>JEDEN NASTĘPNY KROK</span>
           </div>
           <h1>
             Twój system.
@@ -382,9 +388,9 @@ export default function App() {
             <em>Twój kierunek.</em>
           </h1>
           <p>
-            Kernel, runtime i Control Room.
+            Twój dzień, projekty i narzędzia.
             <br />
-            Jedna infrastruktura dla Twojego frameworka.
+            Zacznij od jednej rzeczy.
           </p>
         </div>
         <form
@@ -418,8 +424,7 @@ export default function App() {
             Wejdź do OSA ↗
           </button>
           <p className="fine">
-            Token tworzysz lokalnie przez <code>npm run setup</code>. Konta i
-            role należą do Twojej infrastruktury.
+            Launcher Windows otwiera prywatną sesję automatycznie. Przy ręcznym uruchomieniu token znajdziesz w <code>data/access-token.txt</code>.
           </p>
           {error && (
             <p role="alert" className="error-inline">
@@ -429,60 +434,15 @@ export default function App() {
         </form>
       </div>
     );
-  if (view === 'day') return <Organizer identity={identity} api={api}
-    onNavigate={(v) => navigate(v)}
-    onTool={(id, taskContext) => { setEngineId(id); setContext(taskContext); setUrl(''); setWebSearch(false); setResult(undefined); setAttachMission(false); navigate('engines'); }}
-    onLogout={async () => { stopShare(); await api('/api/auth/logout', 'POST', {}); setIdentity(undefined); setBoot(undefined); setContext(''); setArtifact(''); setTitle(''); setObservation(''); setResult(undefined); setView('day'); }} />;
-  return (
-    <div className={'app ' + (focused ? 'focus' : '')}>
-      <div className="identity-line">
-        <button className="tag" onClick={() => navigate('day')}>
-          OSA<span>CONTROL ROOM / KERNEL 0.1</span>
-        </button>
-        <span className="identity-name">
-          <i />
-          {identity.subject} / {identity.tenantId}
-        </span>
-        <div>
-          <button className="textbutton" onClick={() => navigate('day')}>Mój dzień</button>
-          <button className="textbutton" onClick={() => setFocused(!focused)}>
-            {focused ? 'Pokaż ekosystem' : 'Focus'}
-          </button>
-          <button
-            className="textbutton"
-            onClick={() =>
-              work(async () => {
-                stopShare();
-                await api('/api/auth/logout', 'POST', {});
-                setIdentity(undefined);
-                setBoot(undefined);
-                setContext('');
-                setArtifact('');
-                setTitle('');
-                setObservation('');
-                setResult(undefined);
-              })
-            }
-          >
-            Wyloguj
-          </button>
-        </div>
-      </div>
-      {error && (
-        <div role="alert" className="error-banner">
-          {error}
-          <button aria-label="Zamknij błąd" onClick={() => setError('')}>
-            ×
-          </button>
-        </div>
-      )}
-      <main>
+  const workspace = (
+    <div className="app o-workspace-content">
+      <div className="workspace-body">
         {view === 'room' && (
           <>
             <div className="room-heading">
               <div>
                 <div className="eyebrow">INTENTION → EXECUTION → EVIDENCE</div>
-                <h1>{mission?.title || 'Ustaw kierunek.'}</h1>
+                <h2>{mission?.title || 'Ustaw kierunek.'}</h2>
                 <p className="next">
                   <span>NASTĘPNY RUCH</span>
                   {mission?.steps.find((s) => !s.done)?.title ||
@@ -751,7 +711,7 @@ export default function App() {
           <>
             <div className="view-heading">
               <div className="eyebrow">OSA ENGINES / TRWAŁE WYKONANIA</div>
-              <h1>Silniki Twojej pracy.</h1>
+              <h2>Silniki Twojej pracy.</h2>
               <p>
                 Każde wywołanie trafia do kernela i kolejki. Wynik, źródła i
                 dowód zostają związane z wykonaniem.
@@ -781,17 +741,13 @@ export default function App() {
                 </span>
                 <h2>{engine.title}</h2>
                 <p>{engine.description}</p>
-                <div className="kernel-note">
-                  <span>CORE CONTRACT</span>
-                  <p>Wejście → run ID → kolejka → worker → wynik → evidence.</p>
-                  <p>
-                    {['prompt', 'daily-report', 'verify-syntax'].includes(
-                      engineId,
-                    )
-                      ? 'Działa lokalnie bez modelu AI.'
-                      : 'Wymaga skonfigurowanego modelu na backendzie. Brak konfiguracji wraca jako jawny błąd zadania.'}
-                  </p>
-                </div>
+                <p className="o-engine-availability">
+                  {['prompt', 'daily-report', 'verify-syntax'].includes(engineId)
+                    ? 'Gotowe lokalnie.'
+                    : boot?.integrations.some(i => i.id === 'openai' && i.status === 'configured')
+                      ? 'Model jest połączony.'
+                      : 'Połącz model w konfiguracji OSA, aby uruchomić to narzędzie.'}
+                </p>
               </div>
               <form
                 onSubmit={(e) => {
@@ -862,7 +818,7 @@ export default function App() {
           <>
             <div className="view-heading">
               <div className="eyebrow">EXECUTION TRACE / WORKER</div>
-              <h1>Widzisz, co się dzieje.</h1>
+              <h2>Widzisz, co się dzieje.</h2>
               <p>
                 Kolejka, próby, błędy i wyniki. Zadania przetrwają restart API.
               </p>
@@ -914,7 +870,7 @@ export default function App() {
           <>
             <div className="view-heading">
               <div className="eyebrow">CLAIM ≠ PROOF</div>
-              <h1>Dowód ma pochodzenie.</h1>
+              <h2>Dowód ma pochodzenie.</h2>
               <p>
                 Digest sprawdza integralność; wynik parsera potwierdza wykonaną
                 kontrolę składni. Tekst AI pozostaje draftem.
@@ -1064,7 +1020,7 @@ export default function App() {
           <>
             <div className="view-heading">
               <div className="eyebrow">OSA ACADEMY / CERTIFICATE LAB</div>
-              <h1>Ucz się na własnym kodzie.</h1>
+              <h2>Ucz się na własnym kodzie.</h2>
               <p>
                 Sesja zachowuje konkretne obserwacje. Po niej powstaje raport,
                 ćwiczenia naprawcze i następny krok.
@@ -1270,7 +1226,7 @@ export default function App() {
           <>
             <div className="view-heading">
               <div className="eyebrow">RYTM / SCHEDULER</div>
-              <h1>Jedna rzecz. W swoim czasie.</h1>
+              <h2>Jedna rzecz. W swoim czasie.</h2>
               <p>
                 Blok skupienia w przeglądarce. Raport wieczorny uruchamiany
                 przez trwały harmonogram workera.
@@ -1440,11 +1396,11 @@ export default function App() {
               <div className="eyebrow">
                 OSA INFRASTRUCTURE / FRAMEWORK FOUNDATION
               </div>
-              <h1>
+              <h2>
                 Jedna infrastruktura.
                 <br />
                 <em>Cały ekosystem.</em>
-              </h1>
+              </h2>
             </div>
             <div className="architecture">
               <span>IDENTITY</span>
@@ -1508,22 +1464,21 @@ export default function App() {
             </div>
           </>
         )}
-      </main>
-      <nav className="command-dock" aria-label="Nawigacja OSA">
-        {areas.map((a) => (
-          <button
-            key={a.id}
-            className={view === a.id ? 'active' : ''}
-            onClick={() => navigate(a.id)}
-          >
-            <small>{a.mark}</small>
-            {a.name}
-          </button>
-        ))}
-      </nav>
-      <footer>
-        OSA / YOUR INFRASTRUCTURE <span>IDENTITY · EXECUTION · PROOF</span>
-      </footer>
+      </div>
     </div>
   );
+  return <Organizer identity={identity} api={api}
+    workspace={view === 'day' ? undefined : workspace}
+    workspaceView={view} workspaceName={areas.find(a => a.id === view)?.name || ''}
+    globalError={error} onClearGlobalError={() => setError('')}
+    projects={boot?.report.missions || []} schedules={boot?.schedules || []}
+    modelReady={boot?.integrations.some(i => i.id === 'openai' && i.status === 'configured') || false}
+    onSchedule={async (hour, minute, zone) => {
+      await work(async () => { await api('/api/schedules', 'POST',
+        { title: 'Raport osobistego dnia', hour, minute, timezone: zone }); await refresh(); });
+    }}
+    onNavigate={v => navigate(v)}
+    onTool={(id, taskContext) => { setEngineId(id); setContext(taskContext); setUrl(''); setWebSearch(false); setResult(undefined); setAttachMission(false); navigate('engines'); }}
+    onLogout={async () => { stopShare(); await api('/api/auth/logout', 'POST', {}); setIdentity(undefined); setBoot(undefined); setContext(''); setArtifact(''); setTitle(''); setObservation(''); setResult(undefined); setView('day'); }}
+  />;
 }
