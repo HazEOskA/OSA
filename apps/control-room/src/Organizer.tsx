@@ -55,7 +55,7 @@ function EntryEditor({ entry, busy, error, readOnly, onSave, onClose, onReload }
   const closed = readOnly || ['done', 'archived'].includes(entry.status);
   return <dialog className="o-dialog" ref={dialog} onCancel={onClose} aria-labelledby="o-edit-heading">
     <div className="o-dialog-heading"><h2 id="o-edit-heading">{closed ? 'Twój zapis' : 'Jedna konkretna praca'}</h2><button type="button" aria-label="Zamknij wpis" onClick={onClose}>×</button></div>
-    <form onSubmit={async e => { e.preventDefault(); if (await onSave({ action: 'edit', id: entry.id, version: entry.version, text, nextStep: step, estimateMinutes: estimate })) onClose(); }}>
+    <form onSubmit={async e => { e.preventDefault(); if (closed) return; if (await onSave({ action: 'edit', id: entry.id, version: entry.version, text, nextStep: step, estimateMinutes: estimate })) onClose(); }}>
       <label htmlFor="o-edit-text">Pełna treść wpisu</label><textarea id="o-edit-text" value={text} onChange={e => setText(e.target.value)} maxLength={4000} required readOnly={closed} />
       <label htmlFor="o-edit-step">Następny krok</label><textarea id="o-edit-step" className="o-step-input" value={step} onChange={e => setStep(e.target.value)} maxLength={1000} readOnly={closed} placeholder="Co dokładnie zrobisz jako pierwsze?" />
       <label htmlFor="o-estimate">Szacowany czas w minutach</label><input id="o-estimate" type="number" min={1} max={480} value={estimate} onChange={e => setEstimate(Number(e.target.value))} readOnly={closed} />
@@ -91,7 +91,7 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
   const apiRef = useRef(api), dateRef = useRef(chosenDate), busyRef = useRef(false);
   const sequence = useRef(0), anchor = useRef({ server: Date.now(), client: performance.now() });
   const captureRef = useRef<HTMLTextAreaElement>(null);
-  const pageSequence = useRef(0);
+  const pageSequence = useRef(0), readFailed = useRef(false);
   apiRef.current = api; dateRef.current = chosenDate;
   function accept(snapshot: OrganizerSnapshot) {
     anchor.current = { server: Date.parse(snapshot.serverNow), client: performance.now() };
@@ -101,9 +101,9 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout 
     const seq = ++sequence.current;
     try {
       const snapshot = await apiRef.current<OrganizerSnapshot>('/api/organizer' + (date ? '?date=' + encodeURIComponent(date) : ''));
-      if (seq === sequence.current) accept(snapshot);
+      if (seq === sequence.current) { if (readFailed.current) { setError(''); readFailed.current = false; } accept(snapshot); }
     } catch (e) {
-      if (seq === sequence.current) { setConnection('offline'); setError(e instanceof Error ? e.message : 'Brak połączenia. Ponów odczyt.'); }
+      if (seq === sequence.current) { readFailed.current = true; setConnection('offline'); setError(e instanceof Error ? e.message : 'Brak połączenia. Ponów odczyt.'); }
     }
   }
   useEffect(() => {

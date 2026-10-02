@@ -104,6 +104,7 @@ try {
     .click();
   await page.getByText('Zamknięte', { exact: false }).first().waitFor();
   await page.reload();
+  await page.getByRole('button', { name: 'Projekty', exact: true }).last().click();
   await page
     .locator('.mission-row')
     .filter({ hasText: 'sprawdzić infrastrukturę' })
