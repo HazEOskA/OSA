@@ -39,7 +39,7 @@ jobs:
         timeout-minutes: 3
         env:
           OSA_QA_IMAGE_LOG: 'true'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: control-room-browser-proof
@@ -69,7 +69,7 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run test:organizer:browser
         timeout-minutes: 3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: windows-dashboard-browser-proof
@@ -79,7 +79,7 @@ jobs:
       - run: npm prune --omit=dev
       - run: npm run package:windows
       - run: npm run test:launcher
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: osa-dashboard-windows
           path: osa-dashboard-windows/
