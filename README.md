@@ -1,5 +1,7 @@
 # OSA — infrastruktura pod framework
 
+[![OSA verification](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml/badge.svg)](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml)
+
 Własny kernel, API, trwały runtime i Control Room. Jeden przepływ: **cel → wykonanie → dowód → raport**. React UI, TypeScript SDK i MCP używają tego samego backendu.
 
 ## Uruchom

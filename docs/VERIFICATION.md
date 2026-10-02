@@ -2,6 +2,18 @@
 
 Stan lokalny sprawdzony 2026-10-02. CLAIM != PROOF: obecność adaptera nie oznacza wykonania integracji z dostawcą.
 
+## Potwierdzony wynik CI
+
+[GitHub Actions: OSA verification / 36989924527](https://github.com/HazEOskA/OSA/actions/runs/36989924527) zakończył się **SUCCESS** dla kodu w commit [`ebdf8528e25b2dbff5c251ed0fe63f86b58f927f`](https://github.com/HazEOskA/OSA/commit/ebdf8528e25b2dbff5c251ed0fe63f86b58f927f).
+
+- 17 testów: 17 PASS, 0 FAIL, bez pominięć; również rzeczywisty PostgreSQL 18 i niezależne połączenia.
+- Browser check: desktop/mobile, pełna ścieżka misji, parser, bound proof, durable reload, zgoda, raport, guard egzaminu i logout.
+- Obraz Docker zbudowany, usługi Compose uruchomione.
+- Compose check wykonał rzeczywisty parser w **osobnym workerze** i zweryfikował zapisany dowód w PostgreSQL; procesy API i worker korzystały z jednego magazynu.
+- Screenshoty desktop/mobile są w artefakcie `control-room-browser-proof` tego run; retencja 7 dni. Nie zawiera tokenów ani bazy.
+
+Poniższa tabela rozróżnia wyniki środowiska lokalnego od potwierdzonego CI. Brak lokalnego Docker/PostgreSQL został pokryty testem w GitHub Actions, nie deklaracją.
+
 | Sprawdzenie                                | Wynik          | Dowód i zakres                                                                                                  |
 | ------------------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------- |
 | TypeScript backend + React                 | PASS           | `npm run typecheck`, strict mode                                                                                |
