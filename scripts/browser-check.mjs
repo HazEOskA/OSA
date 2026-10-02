@@ -49,9 +49,10 @@ try {
   await page.getByLabel('Token dostępu').fill(token);
   await page.getByRole('button', { name: 'Wejdź do OSA' }).click();
   await page
-    .getByRole('button', { name: 'Control Room', exact: false })
+    .getByRole('button', { name: 'Projekty', exact: false })
     .last()
     .waitFor();
+  await page.getByRole('button', { name: 'Projekty', exact: true }).last().click();
   await page
     .getByRole('textbox', { name: 'Nowa misja' })
     .fill('OSA / sprawdzić infrastrukturę');
@@ -96,7 +97,7 @@ try {
   assert.match(await page.locator('.output pre').innerText(), /Exit code: 0/);
   await page
     .locator('.command-dock')
-    .getByRole('button', { name: 'Control Room' })
+    .getByRole('button', { name: 'Projekty' })
     .click();
   await page
     .getByRole('button', { name: 'Zamknij z kontrolą', exact: true })
@@ -158,7 +159,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page
     .locator('.command-dock')
-    .getByRole('button', { name: 'Control Room' })
+    .getByRole('button', { name: 'Projekty' })
     .click();
   await page.screenshot({ path: 'qa/mobile.png', fullPage: true });
   const dimensions = await page.evaluate(() => ({

@@ -1,4 +1,12 @@
-# Weryfikacja OSA infra
+# Weryfikacja osobistego organizera
+
+Nowy organizer jest sprawdzany przez aktualny workflow `OSA verification`: `npm run verify`, `npm run test:browser` i `npm run test:organizer:browser`. Zestaw dodaje 10 scenariuszy organizera oraz test HTTP prywatności/CSRF; PostgreSQL wymaga `OSA_TEST_DATABASE_URL`, które jest ustawione w CI. Wynik jest związany z SHA konkretnego run, a zrzuty trafiają do `control-room-browser-proof`.
+
+Ten rozdział opisuje wykonywane sprawdzenia. Potwierdzone wyniki bieżącego commita są dostępne w [GitHub Actions](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml). Poniższe wyniki dotyczą wcześniejszej bazy infrastruktury i nie zastępują nowych testów organizera.
+
+---
+
+# Weryfikacja wcześniejszej bazy OSA infra
 
 Stan lokalny sprawdzony 2026-10-02. CLAIM != PROOF: obecność adaptera nie oznacza wykonania integracji z dostawcą.
 

@@ -42,3 +42,32 @@ Błąd: `{ error: { code, message, requestId } }`. JSON input jest walidowany i 
 Reader cannot write. Builder can run engines and update missions; owner can decide approvals and schedules. Version conflicts return 409. The same idempotency key returns the same run if request digest matches; changed input returns 409.
 
 Types: `packages/kernel/src/contracts.ts`. SDK: `packages/sdk/src/index.ts` (`OsaClient`).
+
+
+## Osobisty organizer
+
+Namespace wylicza serwer z pary authenticated tenantId + subject. Body nie wybiera użytkownika.
+Reader ma odczyt własnego organizera. POST zachowuje dotychczasowe kontrole Origin, CSRF, rozmiaru body i limitu wywołań.
+
+- GET /api/organizer?date=YYYY-MM-DD → OrganizerSnapshot; bez date: dzień w strefie użytkownika.
+- GET /api/organizer/inbox?status=inbox|later|done|archived&cursor=... → Page<OrganizerEntry>.
+- POST /api/organizer → nowy OrganizerSnapshot po zatwierdzonej transakcji; body zawiera action oraz opcjonalne date.
+- Konflikt wersji: 409 VERSION_CONFLICT. Należy odczytać widok i świadomie ponowić akcję.
+- Snapshot ma ostatnie 200 wpisów/bloków i 30 planów/domknięć oraz coverage. Priorytety, ukończenia dnia, bloki dnia, aktywny blok i plan na jutro są pobierane osobno po id.
+- Pełną skrzynkę można przejść kursorem. Strona może nie zawierać dopasowanych wpisów, lecz mieć nextCursor; należy czytać dalej.
+
+| action | Wejście poza action/date | Efekt |
+| --- | --- | --- |
+| capture | text (1–4000 znaków), nextStep?, estimateMinutes? | Pełny zapis w inbox; bez automatycznego planowania |
+| edit | id, version wpisu, text?, nextStep?, estimateMinutes? | Wersjonowana edycja aktywnego wpisu |
+| move | id, version wpisu, status (inbox/later/archived), planVersion gdy jest priorytetem | Zmiana listy; archiwum zachowuje treść i wcześniejszy stan |
+| restore | id, version wpisu, planVersion gdy wymagane | Przywrócenie z archiwum |
+| priority.add/remove | id, version planu | Najwyżej trzy priorytety; pierwszy wybrany staje się TERAZ |
+| select | id, version planu | Wybór jednej aktywnej pracy spośród priorytetów |
+| settings | version planu, availableMinutes (0–720), timezone?, settingsVersion gdy zmienia timezone | Budżet dnia i strefa IANA |
+| complete | id, version wpisu | Oznaczenie ukończenia; wymaga zakończenia jego bloku |
+| block.start | id wybranej pracy, version planu, settingsVersion, minutes (1–180) | Jeden blok na osobę; wymaga nextStep |
+| block.pause/resume/finish | id bloku, version bloku, note? dla finish | Zegar serwera i trwały stan; finish nie oznacza automatycznie ukończenia zadania |
+| close | version planu, notes?, blocker?, tomorrowId?, tomorrowVersion gdy jest tomorrowId | Niezmienny snapshot i atomowe przeniesienie jednej pracy na jutro |
+
+Domknięty plan odrzuca ponowne close oraz start/zmianę priorytetów. Capture pozostaje dostępne. Blok sprzed północy można zakończyć następnego dnia. Limit bezpieczeństwa wynosi 200 ukończeń i 200 bloków na dzień; przekroczenie zwraca DAY_LIMIT zamiast obcinać raport.

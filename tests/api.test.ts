@@ -34,6 +34,7 @@ async function fixture(
         role: 'owner',
         tokenHash: hash(ownerToken),
       },
+      { tenantId: 'alpha', subject: 'colleague', role: 'owner', tokenHash: hash('fixture-colleague') },
       {
         tenantId: 'beta',
         subject: 'other',
@@ -227,3 +228,29 @@ test('token rotation revokes existing sessions and policy changes update roles',
     await store.close();
   }
 });
+
+test('organizer HTTP: personal isolation, forged subject ignored, reader/Origin/CSRF guards', () =>
+  fixture(async (url, _kernel, _worker, token) => {
+    const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+    const created = await fetch(url + '/api/organizer', { method: 'POST', headers, body: JSON.stringify({ action: 'capture', text: 'Owner private plan', subject: 'colleague', tenantId: 'beta' }) });
+    assert.equal(created.status, 200);
+    const snapshot = await created.json() as import('../packages/kernel/src/contracts.js').OrganizerSnapshot;
+    assert.equal(snapshot.entries.length, 1);
+    for (const foreign of ['fixture-colleague', 'fixture-beta', 'fixture-reader']) {
+      const response = await fetch(url + '/api/organizer', { headers: { Authorization: 'Bearer ' + foreign } });
+      const privateView = await response.json() as import('../packages/kernel/src/contracts.js').OrganizerSnapshot;
+      assert.equal(privateView.entries.length, 0);
+    }
+    const reader = await fetch(url + '/api/organizer', { method: 'POST', headers: { ...headers, Authorization: 'Bearer fixture-reader' }, body: JSON.stringify({ action: 'capture', text: 'denied' }) });
+    assert.equal(reader.status, 403);
+    const hostile = await fetch(url + '/api/organizer', { method: 'POST', headers: { ...headers, Origin: 'https://attacker.invalid' }, body: JSON.stringify({ action: 'capture', text: 'denied' }) });
+    assert.equal(hostile.status, 403);
+    const login = await fetch(url + '/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+    const loginBody = await login.json() as { csrf: string };
+    const denied = await fetch(url + '/api/organizer', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'capture', text: 'denied' }) });
+    assert.equal(denied.status, 403);
+    const allowed = await fetch(url + '/api/organizer', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-OSA-CSRF': loginBody.csrf }, body: JSON.stringify({ action: 'capture', text: 'with CSRF' }) });
+    assert.equal(allowed.status, 200);
+    assert.equal((await fetch(url + '/api/organizer')).status, 401);
+  }));

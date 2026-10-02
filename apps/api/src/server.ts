@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Kernel } from '../../../packages/kernel/src/service.js';
+import { Organizer } from '../../../packages/kernel/src/organizer.js';
 import { OsaError } from '../../../packages/kernel/src/contracts.js';
 import type {
   Entity,
@@ -31,6 +32,7 @@ export interface ServerConfig {
   worker?: Worker;
 }
 export function createApi(kernel: Kernel, config: ServerConfig) {
+  const organizer = new Organizer(kernel.store, kernel.now);
   const auth = new Auth(kernel.store, config.identities);
   const publicOrigin = new URL(config.publicUrl).origin;
   const secure = publicOrigin.startsWith('https:');
@@ -152,6 +154,12 @@ export function createApi(kernel: Kernel, config: ServerConfig) {
             },
           );
         }
+        if (path === '/api/organizer' && method === 'GET')
+          return send(res, 200, await organizer.snapshot(identity, url.searchParams.get('date') || undefined));
+        if (path === '/api/organizer' && method === 'POST')
+          return send(res, 200, await organizer.act(identity, await body(req)));
+        if (path === '/api/organizer/inbox' && method === 'GET')
+          return send(res, 200, await organizer.inbox(identity, url.searchParams.get('cursor') || undefined, url.searchParams.get('status') || 'inbox'));
         if (path === '/api/bootstrap' && method === 'GET') {
           const report = await kernel.report(identity);
           const [approvals, schedules, learning] = await Promise.all(

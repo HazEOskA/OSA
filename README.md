@@ -2,7 +2,7 @@
 
 [![OSA verification](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml/badge.svg)](https://github.com/HazEOskA/OSA/actions/workflows/ci.yml)
 
-Własny kernel, API, trwały runtime i Control Room. Jeden przepływ: **cel → wykonanie → dowód → raport**. React UI, TypeScript SDK i MCP używają tego samego backendu.
+Własny kernel, API, trwały runtime i osobisty organizer. **Mój dzień** jest ekranem startowym: jedna praca TERAZ, następny krok, najwyżej trzy priorytety, skrzynka myśli, zapisany blok skupienia i domknięcie dnia. Projekty, narzędzia oraz zaplecze korzystają z tego samego backendu.
 
 ## Uruchom
 
@@ -14,6 +14,12 @@ npm start
 ```
 
 Otwórz `http://127.0.0.1:3000`; prywatny token jest w `data/access-token.txt`. Node 24+. Setup niczego nie nadpisuje.
+
+## Osobisty organizer
+
+Plan jest prywatny dla zalogowanej osoby, również we wspólnym workspace. Capture zachowuje pełne 4000 znaków i nie planuje pracy automatycznie. Timer korzysta z zegara serwera, ma pauzę i przetrwa odświeżenie oraz restart. Domknięcie zapisuje ukończone i niedokończone sprawy, notatki i jedną pracę na jutro. Główny przepływ działa bez modelu AI.
+
+Dokumentacja organizera, plan narzędzi i golden prompts: [ORGANIZER.md](docs/ORGANIZER.md). Test przeglądarki: `npm run test:organizer:browser` po `npm run setup` i buildzie. CI zapisuje zrzuty desktop, focus, mobile i domknięcia w artefakcie przeglądarki.
 
 ## W tym wydaniu
 

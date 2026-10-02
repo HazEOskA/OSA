@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Organizer from './Organizer';
 import type {
   Approval,
   AuditEvent,
@@ -21,10 +22,11 @@ type Boot = {
   integrations: { id: string; status: string; detail: string }[];
 };
 type View =
-  'room' | 'engines' | 'runs' | 'proof' | 'learn' | 'rhythm' | 'platform';
+  'day' | 'room' | 'engines' | 'runs' | 'proof' | 'learn' | 'rhythm' | 'platform';
 const areas = [
-  { id: 'room', name: 'Control Room', mark: '01' },
-  { id: 'engines', name: 'Silniki', mark: '02' },
+  { id: 'day', name: 'Mój dzień', mark: '◉' },
+  { id: 'room', name: 'Projekty', mark: '01' },
+  { id: 'engines', name: 'Narzędzia', mark: '02' },
   { id: 'runs', name: 'Wykonania', mark: '03' },
   { id: 'proof', name: 'Proof & zgody', mark: '04' },
   { id: 'learn', name: 'Akademia / Certyfikat', mark: '05' },
@@ -48,7 +50,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
-  const [view, setView] = useState<View>('room');
+  const [view, setView] = useState<View>('day');
   const [selected, setSelected] = useState('');
   const [token, setToken] = useState('');
   const [title, setTitle] = useState('');
@@ -402,7 +404,7 @@ export default function App() {
           }}
         >
           <div className="eyebrow">WEJŚCIE DO PRYWATNEJ PRZESTRZENI</div>
-          <h2>Otwórz Control Room.</h2>
+          <h2>Otwórz swój dzień.</h2>
           <label htmlFor="token">Token dostępu</label>
           <input
             id="token"
@@ -427,10 +429,14 @@ export default function App() {
         </form>
       </div>
     );
+  if (view === 'day') return <Organizer identity={identity} api={api}
+    onNavigate={(v) => navigate(v)}
+    onTool={(id, taskContext) => { setEngineId(id); setContext(taskContext); setResult(undefined); setAttachMission(false); navigate('engines'); }}
+    onLogout={async () => { stopShare(); await api('/api/auth/logout', 'POST', {}); setIdentity(undefined); setBoot(undefined); setContext(''); setArtifact(''); setTitle(''); setObservation(''); setResult(undefined); setView('day'); }} />;
   return (
     <div className={'app ' + (focused ? 'focus' : '')}>
       <div className="identity-line">
-        <button className="tag" onClick={() => navigate('room')}>
+        <button className="tag" onClick={() => navigate('day')}>
           OSA<span>CONTROL ROOM / KERNEL 0.1</span>
         </button>
         <span className="identity-name">
@@ -438,6 +444,7 @@ export default function App() {
           {identity.subject} / {identity.tenantId}
         </span>
         <div>
+          <button className="textbutton" onClick={() => navigate('day')}>Mój dzień</button>
           <button className="textbutton" onClick={() => setFocused(!focused)}>
             {focused ? 'Pokaż ekosystem' : 'Focus'}
           </button>

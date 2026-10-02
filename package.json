@@ -18,7 +18,8 @@
     "test:browser": "node scripts/browser-check.mjs",
     "test:compose": "node scripts/compose-check.mjs",
     "dev": "node scripts/dev.mjs",
-    "verify": "npm run typecheck && npm test"
+    "verify": "npm run typecheck && npm test",
+    "test:organizer:browser": "node scripts/organizer-browser.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",

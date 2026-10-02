@@ -115,7 +115,12 @@ export type Kind =
   | 'schedule'
   | 'learning'
   | 'focus'
-  | 'session';
+  | 'session'
+  | 'organizer-entry'
+  | 'organizer-day'
+  | 'organizer-settings'
+  | 'organizer-block'
+  | 'organizer-closure';
 export interface Page<T> {
   items: T[];
   nextCursor?: string;
@@ -142,4 +147,64 @@ export class OsaError extends Error {
   ) {
     super(message);
   }
+}
+
+export type OrganizerStatus = 'inbox' | 'later' | 'ready' | 'done' | 'archived';
+export interface OrganizerEntry extends Entity {
+  text: string;
+  nextStep: string;
+  estimateMinutes: number;
+  status: OrganizerStatus;
+  previousStatus?: Exclude<OrganizerStatus, 'archived'>;
+  completedAt?: string;
+  updatedAt: string;
+}
+export interface OrganizerDay extends Entity {
+  date: string;
+  availableMinutes: number;
+  priorityIds: string[];
+  currentEntryId: string;
+  completedIds: string[];
+  blockIds: string[];
+  closureId?: string;
+}
+export interface OrganizerSettings extends Entity {
+  timezone: string;
+  activeBlockId: string;
+}
+export interface OrganizerBlock extends Entity {
+  date: string;
+  entryId: string;
+  taskText: string;
+  nextStep: string;
+  plannedSeconds: number;
+  elapsedSeconds: number;
+  status: 'running' | 'paused' | 'completed';
+  runningSince?: string;
+  finishedAt?: string;
+  note: string;
+}
+export interface OrganizerClosure extends Entity {
+  date: string;
+  timezone: string;
+  closedAt: string;
+  done: OrganizerEntry[];
+  unfinished: OrganizerEntry[];
+  notes: string;
+  blocker: string;
+  seconds: number;
+  tomorrowDate: string;
+  tomorrow: OrganizerEntry | null;
+}
+export interface OrganizerSnapshot {
+  date: string;
+  serverNow: string;
+  settings: OrganizerSettings;
+  plan: OrganizerDay;
+  entries: OrganizerEntry[];
+  blocks: OrganizerBlock[];
+  activeBlock: OrganizerBlock | null;
+  closures: OrganizerClosure[];
+  plans: OrganizerDay[];
+  coverage: { entriesHaveMore: boolean; blocksHaveMore: boolean; plansHaveMore: boolean };
 }
