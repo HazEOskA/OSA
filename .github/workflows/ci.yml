@@ -25,7 +25,7 @@ jobs:
       OSA_AI_PROVIDER: disabled
       OSA_POSTGRES_PASSWORD: ci-only-password
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -58,7 +58,7 @@ jobs:
     env:
       OSA_AI_PROVIDER: disabled
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
