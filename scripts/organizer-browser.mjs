@@ -9,6 +9,7 @@ const base = 'http://127.0.0.1:' + port;
 const database = './qa/organizer-' + process.pid + '.sqlite';
 await mkdir('qa', { recursive: true });
 let app, browser, page, logs = '';
+const phase = name => console.log('Organizer QA phase: ' + name);
 function start() {
   const processHandle = spawn(process.execPath, ['--env-file-if-exists=.env', 'dist/apps/api/src/main.js'], {
     env: { ...process.env, OSA_PORT: String(port), OSA_DB_KIND: 'sqlite', OSA_SQLITE_PATH: database, OSA_PUBLIC_URL: base, OSA_AI_PROVIDER: 'disabled' },
@@ -20,16 +21,24 @@ function start() {
 }
 async function ready() {
   for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(base + '/health/ready')).ok) return; } catch {}
+    try { if ((await fetch(base + '/health/ready', { signal: AbortSignal.timeout(1000) })).ok) return; } catch {}
     await new Promise(resolve => setTimeout(resolve, 150));
   }
   throw Error('Organizer API startup failed: ' + logs);
 }
 async function stop() {
   if (!app || app.exitCode !== null) return;
-  const exited = once(app, 'exit');
-  app.kill('SIGTERM');
-  await exited;
+  const processHandle = app, exited = once(processHandle, 'exit');
+  let forced = false;
+  phase('stopping API');
+  processHandle.kill('SIGTERM');
+  const deadline = setTimeout(() => {
+    forced = true;
+    processHandle.kill('SIGKILL');
+  }, 5000);
+  try { await exited; } finally { clearTimeout(deadline); }
+  if (forced) throw Error('QA API did not exit within 5 seconds after SIGTERM; terminated only the owned test process. API log: ' + logs.slice(-3000));
+  phase('API stopped');
 }
 async function action(p, locator, status = 200) {
   const responsePromise = p.waitForResponse(r => new URL(r.url()).pathname === '/api/organizer' && r.request().method() === 'POST');
@@ -64,7 +73,7 @@ async function screenshot(name, preview = false) {
   }
 }
 try {
-  app = start(); await ready();
+  app = start(); await ready(); phase('server ready');
   browser = await chromium.launch({ headless: true, ...(process.env.OSA_QA_CHROMIUM ? { executablePath: process.env.OSA_QA_CHROMIUM } : {}) });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'pl-PL', timezoneId: 'Europe/Amsterdam' });
   page = await context.newPage();
@@ -78,7 +87,7 @@ try {
   let s = await snapshot();
   assert.equal(s.entries.length, 0);
   assert.equal(s.blocks.length, 0);
-  await screenshot('empty');
+  await screenshot('empty'); phase('empty day and manual login');
   // All modules are available before selecting a task. Opening one preserves
   // the organizer draft and does not invoke any model or enqueue a run.
   await page.getByLabel('Myśl do skrzynki').fill('Niezapisany szkic bez utraty kontekstu');
@@ -140,7 +149,7 @@ try {
   assert.equal(runs.length, 0, 'opening a contextual tool must not enqueue execution');
   await page.locator('.o-workspace-nav').getByRole('button', { name: 'Mój dzień' }).click();
   await page.getByRole('heading', { level: 1, name: firstText }).waitFor();
-  await screenshot('desktop', true);
+  await screenshot('desktop', true); phase('priorities, capture and integrated tools');
 
   await page.getByRole('button', { name: '5 min', exact: true }).click();
   const started = await action(page, page.getByRole('button', { name: 'Rozpocznij blok' }));
@@ -149,7 +158,7 @@ try {
   assert.equal(await page.locator('.o-priorities').count(), 0);
   assert.equal(await page.locator('.o-inbox').count(), 0);
   assert.equal(await page.locator('.o-tools-context').count(), 0);
-  await screenshot('focus', true);
+  await screenshot('focus', true); phase('focused block');
   await page.waitForFunction(() => document.querySelector('.o-timer')?.textContent !== '05:00');
   await page.reload();
   await page.getByRole('heading', { level: 1, name: firstText }).waitFor();
@@ -174,7 +183,7 @@ try {
   await action(other, other.getByRole('button', { name: 'Wznów blok', exact: true }));
 
   // The same file and session are re-opened by a new server process.
-  await stop(); app = start(); await ready();
+  phase('restart requested'); await stop(); app = start(); await ready();
   await page.reload();
   await page.getByRole('heading', { level: 1, name: firstText }).waitFor();
   s = await snapshot();
@@ -201,11 +210,11 @@ try {
   const scheduleResponse = page.waitForResponse(r=>new URL(r.url()).pathname==='/api/schedules'&&r.request().method()==='POST');
   await page.getByRole('button', { name:'Włącz raport wieczorny' }).click();
   assert.equal((await scheduleResponse).status(),201);
-  await page.getByText('Wieczorem o 21:00', { exact:false }).waitFor();
+  await page.getByText('Wieczorem o 21:00', { exact:false }).waitFor(); phase('personal report and owned schedule');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => scrollTo(0, 0));
-  await screenshot('mobile', true);
+  await screenshot('mobile', true); phase('mobile');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'mobile overflow');
   await page.getByRole('button', { name: 'Domknij dzień', exact: true }).first().click();
   await page.getByLabel('Co dziś zadziałało?').fill('QA: dokumentacja ma konkretny przepływ.');
@@ -226,13 +235,13 @@ try {
   await page.getByRole('heading', { level: 1, name: secondText }).waitFor();
   assert.equal(await page.getByLabel('Wybierz dzień').inputValue(), report.tomorrowDate);
   assert.deepEqual((await snapshot(page, report.tomorrowDate)).plan.priorityIds, [second.id]);
-  assert.deepEqual(errors, []);
+  assert.deepEqual(errors, []); phase('evening closure and tomorrow');
   await page.getByRole('button', { name: 'Wyloguj', exact: true }).click();
   await page.getByLabel('Token dostępu').waitFor();
   await page.goto(base + '/#osa-token=' + encodeURIComponent(token));
   await page.locator('.o-now h1').waitFor();
   assert.equal((await snapshot()).plan.closureId, report.id);
-  assert.equal(new URL(page.url()).hash,'');
+  assert.equal(new URL(page.url()).hash,''); phase('automatic local login after logout');
   assert.deepEqual(errors, []);
   console.log('Organizer browser PASS: empty state, full capture/archive restore, 3 priorities/4th retained, next-step guard, budget, context without auto-run, focus, timer reload/two tabs/server restart, completion, mobile overflow, immutable evening snapshot and tomorrow task; integrated tools, draft preservation, private daily report, owned evening schedule and local automatic login.');
 } catch (e) {
@@ -241,5 +250,5 @@ try {
   }
   throw e;
 } finally {
-  await browser?.close(); await stop();
+  phase('closing browser'); await browser?.close(); phase('browser closed'); await stop();
 }
