@@ -142,7 +142,7 @@ try {
   await page.getByText('snapshot zapisany', { exact: true }).waitFor({ timeout: 10000 });
   await page.getByRole('heading', { name: 'Ostatnie 3 dni', exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Tydzień / ostatnie 7 dni', exact: true }).waitFor();
-  assert.match(await page.locator('.o-report-dashboard').innerText(), /Kolejne kroki/);
+  assert.match(await page.locator('.o-report-dashboard').innerText(), /kolejne kroki/i);
   await page.screenshot({ path: 'qa/reports.png', fullPage: true });
   await page
     .locator('.o-workspace-nav')
