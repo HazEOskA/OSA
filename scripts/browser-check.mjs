@@ -139,6 +139,11 @@ try {
   await page.getByRole('button', { name: 'Utwórz raport teraz' }).click();
   await page.locator('.output .state.succeeded').waitFor({ timeout: 15000 });
   assert.match(await page.locator('.output pre').innerText(), /RAPORT OSA/);
+  await page.getByText('snapshot zapisany', { exact: true }).waitFor({ timeout: 10000 });
+  await page.getByRole('heading', { name: 'Ostatnie 3 dni', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Tydzień / ostatnie 7 dni', exact: true }).waitFor();
+  assert.match(await page.locator('.o-report-dashboard').innerText(), /Kolejne kroki/);
+  await page.screenshot({ path: 'qa/reports.png', fullPage: true });
   await page
     .locator('.o-workspace-nav')
     .getByRole('button', { name: 'Akademia / Certyfikat' })
@@ -182,7 +187,7 @@ try {
   await page.getByLabel('Token dostępu').waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    'Browser PASS: login, CSRF-backed writes, mission closure guard, actual worker proof, durable reload, approval, scheduler/report, exam guard, mobile overflow and logout. Desktop/mobile screenshots saved.',
+    'Browser PASS: login, CSRF-backed writes, mission closure guard, actual worker proof, durable reload, approval, scheduler/report dashboard 1-3-7 days, exam guard, mobile overflow and logout. Desktop/mobile/report screenshots saved.',
   );
 } finally {
   await browser?.close();
