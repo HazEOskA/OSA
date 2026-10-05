@@ -147,6 +147,34 @@ body { background: #080a12; }
 .o-report-history > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .o-report-history button { display: flex; gap: 12px; font-size: 12px; }
 .o-report-history > p { color: #a5aec2; }
+.o-report-dashboard { margin: 0 0 28px; padding: 28px 0 30px; border-top: 1px solid #30394e; border-bottom: 1px solid #30394e; }
+.o-report-dashboard-heading { display: flex; justify-content: space-between; gap: 30px; align-items: end; margin-bottom: 24px; }
+.o-report-dashboard-heading > div > span { color: #79dbe5; font-size: 11px; letter-spacing: .16em; }
+.o-report-dashboard-heading h2 { margin: 7px 0 0; font-size: 27px; font-weight: 550; letter-spacing: -.5px; }
+.o-report-dashboard-heading > p { max-width: 55ch; margin: 0; font-size: 12px; color: #93a2b9; }
+.o-report-today { padding: 18px 0 26px; border-bottom: 1px dashed #344058; }
+.o-report-today .o-daily-report { margin-top: 14px; }
+.o-report-empty { padding: 18px 0 4px; }
+.o-report-empty strong { color: #d7deec; font-size: 14px; }
+.o-report-empty p { margin: 6px 0 0; max-width: 70ch; }
+.o-report-window-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 34px; padding-top: 28px; }
+.o-report-rollup { min-width: 0; padding-top: 15px; border-top: 2px solid #4f6e8a; }
+.o-rollup-heading { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.o-rollup-heading > div > span, .o-rollup-heading > span { color: #8edce5; font-size: 10px; letter-spacing: .12em; }
+.o-rollup-heading h3 { margin: 5px 0 0; font-size: 19px; font-weight: 550; letter-spacing: -.2px; }
+.o-rollup-heading time { color: #8f9db1; font-size: 11px; white-space: nowrap; }
+.o-rollup-totals { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; margin: 18px 0 22px; border-top: 1px solid #2c374b; border-bottom: 1px solid #2c374b; }
+.o-rollup-totals p { margin: 0; padding: 13px 8px 13px 0; display: flex; flex-direction: column; gap: 3px; }
+.o-rollup-totals strong { color: #edf0f6; font-size: 24px; font-weight: 500; line-height: 1; }
+.o-rollup-totals span { color: #8f9db1; font-size: 10px; line-height: 1.3; }
+.o-rollup-columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.o-rollup-columns h4 { margin: 0 0 10px; color: #ced8ea; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+.o-rollup-columns ol, .o-rollup-columns ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.o-rollup-columns li { display: grid; grid-template-columns: 78px minmax(0,1fr); gap: 9px; color: #c8d2e4; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.o-rollup-columns li > span { color: #74849d; font-size: 10px; padding-top: 2px; }
+.o-rollup-columns p { margin: 0; font-size: 12px; color: #8595ac; }
+.o-rollup-coverage { margin: 18px 0 0; padding-top: 12px; border-top: 1px dashed #2f3b50; color: #7f8ea5 !important; font-size: 10px !important; }
+
 .o-inbox { margin-top: 0; padding-top: 26px; border: 0; background: transparent; }
 .o-inbox-heading { gap: 14px; flex-wrap: wrap; }
 .o-list-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -264,6 +292,14 @@ body { background: #080a12; }
  .o-workspace-panel .mission-work { padding: 18px 0; }
  .o-workspace-panel .learning-stage section, .o-workspace-panel .platform-stage section, .o-workspace-panel .rhythm-stage section { padding: 15px 0; }
  .o-report-columns { grid-template-columns: minmax(0,1fr); gap: 18px; }
+ .o-report-dashboard-heading { display: block; }
+ .o-report-dashboard-heading > p { margin-top: 10px; }
+ .o-report-window-grid, .o-rollup-columns { grid-template-columns: minmax(0,1fr); gap: 24px; }
+ .o-rollup-heading { display: block; }
+ .o-rollup-heading time { display: block; margin-top: 7px; white-space: normal; }
+ .o-rollup-totals { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .o-rollup-columns li { grid-template-columns: 70px minmax(0,1fr); }
+
  .o-daily-report { padding-left: 14px; }
  .o-report-totals { gap: 14px; }
  .o-report-totals strong { font-size: 24px; }

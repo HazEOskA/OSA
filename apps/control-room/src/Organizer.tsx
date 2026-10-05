@@ -75,6 +75,75 @@ function EntryEditor({ entry, busy, error, readOnly, onSave, onClose, onReload }
   </dialog>;
 }
 
+type ReportRollup = {
+  fromDate: string;
+  toDate: string;
+  reportCount: number;
+  doneCount: number;
+  unfinishedCount: number;
+  seconds: number;
+  nextSteps: { date: string; text: string }[];
+  blockers: { date: string; text: string }[];
+};
+
+function shiftedDate(date: string, days: number) {
+  return new Date(Date.parse(date + 'T12:00:00Z') + days * 86400000).toISOString().slice(0, 10);
+}
+function latestReportsByDate(reports: OrganizerReport[]) {
+  const latest = new Map<string, OrganizerReport>();
+  for (const report of [...reports].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))) {
+    if (!latest.has(report.date)) latest.set(report.date, report);
+  }
+  return latest;
+}
+function reportRollup(reports: OrganizerReport[], toDate: string, days: number): ReportRollup {
+  const fromDate = shiftedDate(toDate, -(days - 1));
+  const selected = [...latestReportsByDate(reports).values()]
+    .filter(report => report.date >= fromDate && report.date <= toDate)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.generatedAt.localeCompare(a.generatedAt));
+  const taskState = new Map<string, 'done' | 'open'>();
+  const steps: { date: string; text: string }[] = [];
+  const stepKeys = new Set<string>();
+  const blockers: { date: string; text: string }[] = [];
+  const blockerKeys = new Set<string>();
+  for (const report of selected) {
+    for (const entry of report.done) if (!taskState.has(entry.id)) taskState.set(entry.id, 'done');
+    for (const entry of report.unfinished) if (!taskState.has(entry.id)) taskState.set(entry.id, 'open');
+    const candidates = [report.nextStep, ...report.unfinished.map(entry => entry.nextStep)].map(step => step.trim()).filter(Boolean);
+    for (const step of candidates) if (!stepKeys.has(step) && steps.length < 6) {
+      stepKeys.add(step); steps.push({ date: report.date, text: step });
+    }
+    const blocker = report.blocker.trim();
+    if (blocker && !blockerKeys.has(blocker) && blockers.length < 4) {
+      blockerKeys.add(blocker); blockers.push({ date: report.date, text: blocker });
+    }
+  }
+  return {
+    fromDate, toDate, reportCount: selected.length,
+    doneCount: [...taskState.values()].filter(state => state === 'done').length,
+    unfinishedCount: [...taskState.values()].filter(state => state === 'open').length,
+    seconds: selected.reduce((total, report) => total + report.seconds, 0),
+    nextSteps: steps, blockers,
+  };
+}
+
+function ReportRollupView({ title, rollup }: { title: string; rollup: ReportRollup }) {
+  return <article className="o-report-rollup">
+    <div className="o-rollup-heading"><div><span>OKNO RAPORTOWE</span><h3>{title}</h3></div><time>{rollup.fromDate} → {rollup.toDate}</time></div>
+    <div className="o-rollup-totals">
+      <p><strong>{rollup.reportCount}</strong><span>dni z raportem</span></p>
+      <p><strong>{rollup.doneCount}</strong><span>ukończone</span></p>
+      <p><strong>{rollup.unfinishedCount}</strong><span>otwarte</span></p>
+      <p><strong>{Math.floor(rollup.seconds / 60)}</strong><span>min pracy</span></p>
+    </div>
+    <div className="o-rollup-columns">
+      <section><h4>Kolejne kroki</h4>{rollup.nextSteps.length ? <ol>{rollup.nextSteps.map((step, index) => <li key={step.date + ':' + index}><span>{step.date}</span>{step.text}</li>)}</ol> : <p>Brak zapisanego następnego kroku w tym oknie.</p>}</section>
+      <section><h4>Blokery</h4>{rollup.blockers.length ? <ul>{rollup.blockers.map((blocker, index) => <li key={blocker.date + ':' + index}><span>{blocker.date}</span>{blocker.text}</li>)}</ul> : <p>Brak zapisanych blockerów w tym oknie.</p>}</section>
+    </div>
+    <p className="o-rollup-coverage">Podsumowanie używa wyłącznie istniejących immutable raportów dziennych — brakujące dni nie są uzupełniane przez AI.</p>
+  </article>;
+}
+
 function DailyReport({ report }: { report: OrganizerReport }) {
   return <article className="o-daily-report" aria-label="Raport osobistego dnia">
     <div className="o-report-meta"><span>{report.source === 'schedule' ? 'Z harmonogramu' : 'Na wywołanie'}</span><time>{new Date(report.generatedAt).toLocaleString('pl-PL', { timeZone: report.timezone })}</time></div>
@@ -196,6 +265,10 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout,
   const tomorrowPlan = data.plans.find(p => p.date === tomorrowDate);
   const reports = data.reports || [];
   const dayReport = reports.find(r => r.id === selectedReportId) || reports.find(r => r.id === plan.reportId) || reports.find(r => r.date === data.date);
+  const reportByDate = latestReportsByDate(reports);
+  const latestDayReport = reportByDate.get(data.date);
+  const threeDayReport = reportRollup(reports, data.date, 3);
+  const weeklyReport = reportRollup(reports, data.date, 7);
   const personalSchedule = schedules.find(s => s.ownerSubject === identity.subject && s.enabled);
   const activeProjects = projects.filter(p => !['completed', 'cancelled'].includes(p.status));
   function openEditor(entry: OrganizerEntry) { setError(''); setEditor(entry); }
@@ -267,6 +340,17 @@ export default function Organizer({ identity, api, onNavigate, onTool, onLogout,
           {workspace && <section className="o-workspace-panel" id="o-workspace-panel" aria-label={workspaceName}><div className="o-workspace-heading"><h2>{workspaceName}</h2><button onClick={() => onNavigate('day')}>Zamknij pracownię</button></div>{workspace}</section>}
         </section>
         <section className="o-personal-reports" aria-label="Raporty osobiste">
+          {workspaceView === 'rhythm' && <div className="o-report-dashboard" aria-label="Dashboard raportów OSA">
+            <div className="o-report-dashboard-heading"><div><span>RAPORTY / 1 · 3 · 7 DNI</span><h2>Stan pracy i następne ruchy.</h2></div><p>Jedno źródło prawdy: zapisane raporty dzienne. Bez modelu, bez dopowiadania brakujących faktów.</p></div>
+            <section className="o-report-today" aria-label="Raport dzienny">
+              <div className="o-rollup-heading"><div><span>DZIŚ / RAPORT DZIENNY</span><h3>{data.date}</h3></div><span>{latestDayReport ? 'snapshot zapisany' : 'czeka na raport'}</span></div>
+              {latestDayReport ? <DailyReport report={latestDayReport} /> : <div className="o-report-empty"><strong>Brak raportu dziennego dla tego dnia.</strong><p>Wygeneruj go ręcznie albo zostaw aktywny harmonogram raz dziennie. Dashboard nie wymyśla brakujących danych.</p></div>}
+            </section>
+            <div className="o-report-window-grid">
+              <ReportRollupView title="Ostatnie 3 dni" rollup={threeDayReport} />
+              <ReportRollupView title="Tydzień / ostatnie 7 dni" rollup={weeklyReport} />
+            </div>
+          </div>}
           <div className="o-reports-heading"><div><h2>Raport dnia</h2><p>{personalSchedule ? 'Wieczorem o ' + String(personalSchedule.hour).padStart(2, '0') + ':' + String(personalSchedule.minute).padStart(2, '0') + ' · ' + personalSchedule.timezone : 'Ukończone, otwarte sprawy i jeden następny krok.'}</p></div><div className="o-actions"><button className="o-primary" disabled={disabled} onClick={async () => { if (await act({ action: 'report.generate' })) { setSelectedReportId(''); setReportOpen(true); } }}>Wygeneruj raport</button>{dayReport && <button onClick={() => setReportOpen(open => !open)}>{reportOpen ? 'Zwiń raport' : 'Pokaż raport'}</button>}</div></div>
           {!personalSchedule && identity.role === 'owner' && <form className="o-schedule-form" onSubmit={async e => { e.preventDefault(); if (scheduleBusy) return; setScheduleBusy(true); try { const [hour, minute] = scheduleAt.split(':').map(Number); await onSchedule(hour!, minute!, settings.timezone); } finally { setScheduleBusy(false); } }}><label htmlFor="o-schedule-time">Raport co wieczór</label><input id="o-schedule-time" aria-label="Godzina raportu wieczornego" type="time" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} required /><button disabled={disabled || scheduleBusy}>Włącz raport wieczorny</button><span>Raport powstaje, gdy OSA działa.</span></form>}
           {reportOpen && dayReport && <DailyReport report={dayReport} />}
