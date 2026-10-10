@@ -1,11 +1,11 @@
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:25-bookworm-slim AS runtime
 ENV NODE_ENV=production OSA_HOST=0.0.0.0 OSA_PORT=3000
 WORKDIR /app
 COPY package.json package-lock.json ./
